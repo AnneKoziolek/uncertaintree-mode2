@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<simulink:SimulinkModel xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:simulink="http://vitruv.tools/methodologisttemplate/simulink" version="1.0">
+  <contains name="piston_diameter_parameter_block">
+    <parameters name="piston_diameter_parameter_block_parameter" type="Float" value="57.0"/>
+    <ports xsi:type="simulink:OutPort" name="Piston_Diameter" connection="//@connection.6"/>
+  </contains>
+  <contains name="number_of_pistons_block">
+    <parameters name="number_of_pistons_block_parameter" type="Integer" value="4"/>
+    <ports xsi:type="simulink:OutPort" name="No_Pistons" connection="//@connection.5"/>
+  </contains>
+  <contains name="sim_block">
+    <ports xsi:type="simulink:OutPort" name="speed_in_ms"/>
+    <ports xsi:type="simulink:OutPort" name="brake_force_in_NM"/>
+    <ports xsi:type="simulink:InPort" name="env_temp_in_C" connection="//@connection.0"/>
+    <ports xsi:type="simulink:InPort" name="speed_signal_ms" connection="//@connection.1"/>
+    <ports xsi:type="simulink:InPort" name="clamp_force_in_bar" connection="//@connection.2"/>
+    <ports xsi:type="simulink:InPort" name="vibration_in_mym" connection="//@connection.3"/>
+  </contains>
+  <contains name="Clamp-Force Block">
+    <ports xsi:type="simulink:OutPort" name="clamp_force_in_bar" connection="//@connection.2"/>
+    <ports xsi:type="simulink:InPort" name="applied_line_pressure_in_bar" connection="//@connection.4"/>
+    <ports xsi:type="simulink:InPort" name="number_of_pistons" connection="//@connection.5"/>
+    <ports xsi:type="simulink:InPort" name="piston_diameter_in_mm" connection="//@connection.6"/>
+  </contains>
+  <contains name="TimeBlock">
+    <ports xsi:type="simulink:OutPort" name="time_in_s" connection="//@connection.15"/>
+  </contains>
+  <contains name="Env_Temp_Start_0:00">
+    <ports xsi:type="simulink:InPort" name="env_temp_time_signal_start" connection="//@connection.15/@connections.0"/>
+    <ports xsi:type="simulink:OutPort" name="env_temp_time_signal_less_than" connection="//@connection.13"/>
+  </contains>
+  <contains name="Env_Temp_End_1:25">
+    <ports xsi:type="simulink:InPort" name="env_temp_time_signal_end" connection="//@connection.15/@connections.1"/>
+    <ports xsi:type="simulink:OutPort" name="env_temp_time_signal_greater_equals" connection="//@connection.12"/>
+  </contains>
+  <contains name="Env_Temp_Enabler_AND">
+    <ports xsi:type="simulink:InPort" name="Env_Temp_Time_Less_Than" connection="//@connection.7"/>
+    <ports xsi:type="simulink:InPort" name="Env_Temp_Time_Greater_Or_Equal" connection="//@connection.8"/>
+    <ports xsi:type="simulink:OutPort" name="Env_Temp_Time_Enable" connection="//@connection.16"/>
+  </contains>
+  <contains name="Env_Speed_Start_0:00">
+    <ports xsi:type="simulink:InPort" name="env_speed_time_signal_start" connection="//@connection.15/@connections.2"/>
+    <ports xsi:type="simulink:OutPort" name="env_speed_time_signal_less_than" connection="//@connection.9"/>
+  </contains>
+  <contains name="Env_Speed_End_1:15">
+    <ports xsi:type="simulink:InPort" name="env_speed_time_signal_end" connection="//@connection.15/@connections.3"/>
+    <ports xsi:type="simulink:OutPort" name="env_speed_time_signal_greater_equals" connection="//@connection.10"/>
+  </contains>
+  <contains name="Env_Speed_Enabler_AND">
+    <ports xsi:type="simulink:InPort" name="Env_Speed_Time_Less_Than" connection="//@connection.9"/>
+    <ports xsi:type="simulink:InPort" name="Env_Speed_Time_Greater_Or_Equal" connection="//@connection.10"/>
+    <ports xsi:type="simulink:OutPort" name="Env_Speed_Time_Enable" connection="//@connection.17"/>
+  </contains>
+  <contains name="Env_Line_Pressure_Start_1:15">
+    <ports xsi:type="simulink:InPort" name="env_line_pressure_time_signal_start" connection="//@connection.15/@connections.4"/>
+    <ports xsi:type="simulink:OutPort" name="env_line_pressure_time_signal_less_than"/>
+  </contains>
+  <contains name="Env_Line_Pressure_End_1:20">
+    <ports xsi:type="simulink:InPort" name="env_line_pressure_time_signal_end" connection="//@connection.15/@connections.5"/>
+    <ports xsi:type="simulink:OutPort" name="env_line_pressure_time_signal_greater_equals" connection="//@connection.11"/>
+  </contains>
+  <contains name="Env_Line_Pressure_Enabler_AND">
+    <ports xsi:type="simulink:InPort" name="Env_Line_Pressure_Time_Less_Than" connection="//@connection.11"/>
+    <ports xsi:type="simulink:InPort" name="Env_Line_Pressure_Time_Greater_Or_Equal" connection="//@connection.14"/>
+    <ports xsi:type="simulink:OutPort" name="Env_Line_Pressure_Time_Enable" connection="//@connection.18"/>
+  </contains>
+  <contains name="Env_Vibration_Start_0:10">
+    <ports xsi:type="simulink:InPort" name="env_vibration_time_signal_start" connection="//@connection.15/@connections.6"/>
+    <ports xsi:type="simulink:OutPort" name="env_vibration_time_signal_less_than"/>
+  </contains>
+  <contains name="Env_Vibration_End_1:15">
+    <ports xsi:type="simulink:InPort" name="env_vibration_time_signal_end" connection="//@connection.15/@connections.7"/>
+    <ports xsi:type="simulink:OutPort" name="env_vibration_time_signal_greater_equals" connection="//@connection.14"/>
+  </contains>
+  <contains name="Env_Vibration_Enabler_AND">
+    <ports xsi:type="simulink:InPort" name="Env_Vibration_Time_Less_Than" connection="//@connection.13"/>
+    <ports xsi:type="simulink:InPort" name="Env_Vibration_Time_Greater_Or_Equal"/>
+    <ports xsi:type="simulink:OutPort" name="Env_Vibration_Time_Enable" connection="//@connection.19"/>
+  </contains>
+  <contains xsi:type="simulink:SubSystem" name="Env_Temp_Block">
+    <ports xsi:type="simulink:Enable" name="Enable_Temp_Block" connection="//@connection.16"/>
+    <ports xsi:type="simulink:OutPort" name="Block_Temp_C" portBlock="//@contains.17/@subBlocks.0" connection="//@connection.0"/>
+    <subBlocks xsi:type="simulink:OutPortBlock" port="//@contains.17/@ports.1">
+      <parameters name="Temp_Block_C" type="double" value="-15"/>
+    </subBlocks>
+  </contains>
+  <contains xsi:type="simulink:SubSystem" name="Env_Speed_Block">
+    <ports xsi:type="simulink:Enable" name="Enable_Speed_Block" connection="//@connection.17"/>
+    <ports xsi:type="simulink:OutPort" name="Block_Speed_Ms" portBlock="//@contains.18/@subBlocks.0" connection="//@connection.1"/>
+    <subBlocks xsi:type="simulink:OutPortBlock" port="//@contains.18/@ports.1">
+      <parameters name="Speed_ms" type="double" value="60"/>
+    </subBlocks>
+  </contains>
+  <contains xsi:type="simulink:SubSystem" name="Env_Line_Pressure_Block">
+    <ports xsi:type="simulink:Enable" name="Enable_Line_Pressure_Block" connection="//@connection.18"/>
+    <ports xsi:type="simulink:OutPort" name="Block_Line_Pressure_Bar" portBlock="//@contains.19/@subBlocks.0" connection="//@connection.4"/>
+    <subBlocks xsi:type="simulink:OutPortBlock" port="//@contains.19/@ports.1">
+      <parameters name="Line_Pressure_Bar" type="double" value="100"/>
+    </subBlocks>
+  </contains>
+  <contains xsi:type="simulink:SubSystem" name="Env_Vibration_Mym">
+    <ports xsi:type="simulink:Enable" name="Enable_Vibration_Block" connection="//@connection.19"/>
+    <ports xsi:type="simulink:OutPort" name="Block_Vibration_Mym" portBlock="//@contains.20/@subBlocks.0" connection="//@connection.3"/>
+    <subBlocks xsi:type="simulink:OutPortBlock" port="//@contains.20/@ports.1">
+      <parameters name="Temp_Vibration_Mym" type="double" value="35"/>
+    </subBlocks>
+  </contains>
+  <connection xsi:type="simulink:SingleConnection" name="conn_env_temp_in_C" lineName="env_temp_in_C" outport="//@contains.17/@ports.1" inport="//@contains.2/@ports.2"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_speed_signal_ms" lineName="speed_signal_ms" outport="//@contains.18/@ports.1" inport="//@contains.2/@ports.3"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_clamp_force_in_bar" lineName="clamp_force_in_bar" outport="//@contains.3/@ports.0" inport="//@contains.2/@ports.4"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_vibration_in_mym" lineName="vibration_in_mym" outport="//@contains.20/@ports.1" inport="//@contains.2/@ports.5"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_applied_pressure_in_bar" lineName="applied_pressure_in_bar" outport="//@contains.19/@ports.1" inport="//@contains.3/@ports.1"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_number_of_pistons" lineName="number_of_pistons" outport="//@contains.1/@ports.0" inport="//@contains.3/@ports.2"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_piston_diameter_in_mm" lineName="piston_diameter_in_mm" outport="//@contains.0/@ports.0" inport="//@contains.3/@ports.3"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_env_time_less_than" inport="//@contains.7/@ports.0"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_env_time_greater_equal" inport="//@contains.7/@ports.1"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_env_speed_less_than" outport="//@contains.8/@ports.1" inport="//@contains.10/@ports.0"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_env_time_greater_equal" outport="//@contains.9/@ports.1" inport="//@contains.10/@ports.1"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_env_line_pressure_less_than" outport="//@contains.12/@ports.1" inport="//@contains.13/@ports.0"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_env_line_pressure_greater_equal" outport="//@contains.6/@ports.1"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_env_vibration_less_than" outport="//@contains.5/@ports.1" inport="//@contains.16/@ports.0"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_env_vibration_greater_equal" outport="//@contains.15/@ports.1" inport="//@contains.13/@ports.1"/>
+  <connection xsi:type="simulink:MultiConnection" name="conn_time_in_s" lineName="time_in_s" outport="//@contains.4/@ports.0">
+    <connections name="" lineName="conn_time_in_s_temp_start" inport="//@contains.5/@ports.0"/>
+    <connections name="" lineName="conn_time_in_s" inport="//@contains.6/@ports.0"/>
+    <connections name="" lineName="conn_time_in_s" inport="//@contains.8/@ports.0"/>
+    <connections name="" lineName="conn_time_in_s" inport="//@contains.9/@ports.0"/>
+    <connections name="" lineName="conn_time_in_s" inport="//@contains.11/@ports.0"/>
+    <connections name="" lineName="conn_time_in_s" inport="//@contains.12/@ports.0"/>
+    <connections name="" lineName="conn_time_in_s" inport="//@contains.14/@ports.0"/>
+    <connections name="" lineName="conn_time_in_s" inport="//@contains.15/@ports.0"/>
+  </connection>
+  <connection xsi:type="simulink:SingleConnection" name="conn_enable_temp" lineName="enable" outport="//@contains.7/@ports.2" inport="//@contains.17/@ports.0"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_enable_speed" lineName="enable" outport="//@contains.10/@ports.2" inport="//@contains.18/@ports.0"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_enable_line_pressure" lineName="enable" outport="//@contains.13/@ports.2" inport="//@contains.19/@ports.0"/>
+  <connection xsi:type="simulink:SingleConnection" name="conn_enable_vibration" lineName="enable" outport="//@contains.16/@ports.2" inport="//@contains.20/@ports.0"/>
+</simulink:SimulinkModel>

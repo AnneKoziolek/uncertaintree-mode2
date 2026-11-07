@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<uncertainty:UncertaintyAnnotationRepository xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uncertainty="http://vitruv.tools/uncertainty/model">
+  <uncertainties id="BrakeDiscDiameterUncertainty">
+    <uncertaintyLocation parameterLocation="diameterInMM">
+      <referencedComponents href="brakesystem.brakesystem#//@BrakeComponents.0"/>
+    </uncertaintyLocation>
+    <effect representation="Discrete">
+      <uncertaintydomain xsi:type="uncertainty:ParameterizedDiscreteRange" min="5" max="7"/>
+    </effect>
+    <pattern patternType="Random"/>
+    <perspective perspective="Objective"/>
+    <source source="RESOURCES"/>
+  </uncertainties>
+</uncertainty:UncertaintyAnnotationRepository>

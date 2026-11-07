@@ -1,0 +1,177 @@
+context cad::Box
+inv BoxnoIntersectWithBoxDifferentNamespace:
+  let foreignShapes = cad::Namespace.allInstances().reject(ns | ns.shapes.includes(self))
+      .collect(ns | ns.shapes).flatten() in
+  foreignShapes.select(s | s.oclIsTypeOf(cad::Box))
+    .forAll(other |
+    let o: cad::Box = other.oclAsType(cad::Box) in
+    let selfXs = Set{
+      self.origin.x.oclAsType(Real),
+      self.origin.x.oclAsType(Real) + self.edgeVectorA.x.oclAsType(Real),
+      self.origin.x.oclAsType(Real) + self.edgeVectorB.x.oclAsType(Real),
+      self.origin.x.oclAsType(Real) + self.edgeVectorC.x.oclAsType(Real),
+      self.origin.x.oclAsType(Real) + self.edgeVectorA.x.oclAsType(Real) + self.edgeVectorB.x.oclAsType(Real),
+      self.origin.x.oclAsType(Real) + self.edgeVectorA.x.oclAsType(Real) + self.edgeVectorC.x.oclAsType(Real),
+      self.origin.x.oclAsType(Real) + self.edgeVectorB.x.oclAsType(Real) + self.edgeVectorC.x.oclAsType(Real),
+      self.origin.x.oclAsType(Real) + self.edgeVectorA.x.oclAsType(Real) + self.edgeVectorB.x.oclAsType(Real) + self.edgeVectorC.x.oclAsType(Real)} in
+    let selfYs = Set{
+      self.origin.y.oclAsType(Real),
+      self.origin.y.oclAsType(Real) + self.edgeVectorA.y.oclAsType(Real),
+      self.origin.y.oclAsType(Real) + self.edgeVectorB.y.oclAsType(Real),
+      self.origin.y.oclAsType(Real) + self.edgeVectorC.y.oclAsType(Real),
+      self.origin.y.oclAsType(Real) + self.edgeVectorA.y.oclAsType(Real) + self.edgeVectorB.y.oclAsType(Real),
+      self.origin.y.oclAsType(Real) + self.edgeVectorA.y.oclAsType(Real) + self.edgeVectorC.y.oclAsType(Real),
+      self.origin.y.oclAsType(Real) + self.edgeVectorB.y.oclAsType(Real) + self.edgeVectorC.y.oclAsType(Real),
+      self.origin.y.oclAsType(Real) + self.edgeVectorA.y.oclAsType(Real) + self.edgeVectorB.y.oclAsType(Real) + self.edgeVectorC.y.oclAsType(Real)} in
+    let selfZs = Set{
+      self.origin.z.oclAsType(Real),
+      self.origin.z.oclAsType(Real) + self.edgeVectorA.z.oclAsType(Real),
+      self.origin.z.oclAsType(Real) + self.edgeVectorB.z.oclAsType(Real),
+      self.origin.z.oclAsType(Real) + self.edgeVectorC.z.oclAsType(Real),
+      self.origin.z.oclAsType(Real) + self.edgeVectorA.z.oclAsType(Real) + self.edgeVectorB.z.oclAsType(Real),
+      self.origin.z.oclAsType(Real) + self.edgeVectorA.z.oclAsType(Real) + self.edgeVectorC.z.oclAsType(Real),
+      self.origin.z.oclAsType(Real) + self.edgeVectorB.z.oclAsType(Real) + self.edgeVectorC.z.oclAsType(Real),
+      self.origin.z.oclAsType(Real) + self.edgeVectorA.z.oclAsType(Real) + self.edgeVectorB.z.oclAsType(Real) + self.edgeVectorC.z.oclAsType(Real)} in
+    let otherXs = Set{
+      o.origin.x.oclAsType(Real),
+      o.origin.x.oclAsType(Real) + o.edgeVectorA.x.oclAsType(Real),
+      o.origin.x.oclAsType(Real) + o.edgeVectorB.x.oclAsType(Real),
+      o.origin.x.oclAsType(Real) + o.edgeVectorC.x.oclAsType(Real),
+      o.origin.x.oclAsType(Real) + o.edgeVectorA.x.oclAsType(Real) + o.edgeVectorB.x.oclAsType(Real),
+      o.origin.x.oclAsType(Real) + o.edgeVectorA.x.oclAsType(Real) + o.edgeVectorC.x.oclAsType(Real),
+      o.origin.x.oclAsType(Real) + o.edgeVectorB.x.oclAsType(Real) + o.edgeVectorC.x.oclAsType(Real),
+      o.origin.x.oclAsType(Real) + o.edgeVectorA.x.oclAsType(Real) + o.edgeVectorB.x.oclAsType(Real) + o.edgeVectorC.x.oclAsType(Real)
+    } in
+    let otherYs = Set{
+      o.origin.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real),
+      o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real)
+    } in
+    let otherZs = Set{
+      o.origin.z.oclAsType(Real),
+      o.origin.z.oclAsType(Real) + o.edgeVectorA.z.oclAsType(Real),
+      o.origin.z.oclAsType(Real) + o.edgeVectorB.z.oclAsType(Real),
+      o.origin.z.oclAsType(Real) + o.edgeVectorC.z.oclAsType(Real),
+      o.origin.z.oclAsType(Real) + o.edgeVectorA.z.oclAsType(Real) + o.edgeVectorB.z.oclAsType(Real),
+      o.origin.z.oclAsType(Real) + o.edgeVectorA.z.oclAsType(Real) + o.edgeVectorC.z.oclAsType(Real),
+      o.origin.z.oclAsType(Real) + o.edgeVectorB.z.oclAsType(Real) + o.edgeVectorC.z.oclAsType(Real),
+      o.origin.z.oclAsType(Real) + o.edgeVectorA.z.oclAsType(Real) + o.edgeVectorB.z.oclAsType(Real) + o.edgeVectorC.z.oclAsType(Real)
+    } in
+
+    let selfMinX : Real = selfXs.min() in
+    let selfMaxX : Real = selfXs.max() in
+    let selfMinY : Real = selfYs.min() in
+    let selfMaxY : Real = selfYs.max() in
+    let selfMinZ : Real = selfZs.min() in
+    let selfMaxZ : Real = selfZs.max() in
+
+    let otherMinX : Real = otherXs.min() in
+    let otherMaxX : Real = otherXs.max() in
+    let otherMinY : Real = otherYs.min() in
+    let otherMaxY : Real = otherYs.max() in
+    let otherMinZ : Real = otherZs.min() in
+    let otherMaxZ : Real = otherZs.max() in
+
+    selfMaxX < otherMinX or otherMaxX < selfMinX or
+    selfMaxY < otherMinY or otherMaxY < selfMinY or
+    selfMaxZ < otherMinZ or otherMaxZ < selfMinZ
+)
+
+context cad::Cylinder
+inv CylinderNoIntersectWithBoxDifferentNamespace:
+  let foreignShapes =
+    cad::Namespace.allInstances().reject(ns | ns.shapes.includes(self))
+      .collect(ns | ns.shapes).flatten()
+  in
+  foreignShapes.select(s | s.oclIsTypeOf(cad::Box))
+    .forAll(other |
+      let o : cad::Box = other.oclAsType(cad::Box) in
+
+      let cylMinZ : Real =
+        if self.bottomCenter.z < self.topCenter.z
+        then self.bottomCenter.z
+        else self.topCenter.z
+        endif
+      in
+      let cylMaxZ : Real =
+        if self.bottomCenter.z > self.topCenter.z
+        then self.bottomCenter.z
+        else self.topCenter.z
+        endif
+      in
+
+      let boxXs = Set{
+        o.origin.x.oclAsType(Real),
+        o.origin.x.oclAsType(Real) + o.edgeVectorA.x.oclAsType(Real),
+        o.origin.x.oclAsType(Real) + o.edgeVectorB.x.oclAsType(Real),
+        o.origin.x.oclAsType(Real) + o.edgeVectorC.x.oclAsType(Real),
+        o.origin.x.oclAsType(Real) + o.edgeVectorA.x.oclAsType(Real) + o.edgeVectorB.x.oclAsType(Real),
+        o.origin.x.oclAsType(Real) + o.edgeVectorA.x.oclAsType(Real) + o.edgeVectorC.x.oclAsType(Real),
+        o.origin.x.oclAsType(Real) + o.edgeVectorB.x.oclAsType(Real) + o.edgeVectorC.x.oclAsType(Real),
+        o.origin.x.oclAsType(Real) + o.edgeVectorA.x.oclAsType(Real) + o.edgeVectorB.x.oclAsType(Real) + o.edgeVectorC.x.oclAsType(Real)
+      } in
+      let boxYs = Set{
+        o.origin.y.oclAsType(Real),
+        o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real),
+        o.origin.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real),
+        o.origin.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real),
+        o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real),
+        o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real),
+        o.origin.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real),
+        o.origin.y.oclAsType(Real) + o.edgeVectorA.y.oclAsType(Real) + o.edgeVectorB.y.oclAsType(Real) + o.edgeVectorC.y.oclAsType(Real)
+      } in
+      let boxZs = Set{
+        o.origin.z.oclAsType(Real),
+        o.origin.z.oclAsType(Real) + o.edgeVectorA.z.oclAsType(Real),
+        o.origin.z.oclAsType(Real) + o.edgeVectorB.z.oclAsType(Real),
+        o.origin.z.oclAsType(Real) + o.edgeVectorC.z.oclAsType(Real),
+        o.origin.z.oclAsType(Real) + o.edgeVectorA.z.oclAsType(Real) + o.edgeVectorB.z.oclAsType(Real),
+        o.origin.z.oclAsType(Real) + o.edgeVectorA.z.oclAsType(Real) + o.edgeVectorC.z.oclAsType(Real),
+        o.origin.z.oclAsType(Real) + o.edgeVectorB.z.oclAsType(Real) + o.edgeVectorC.z.oclAsType(Real),
+        o.origin.z.oclAsType(Real) + o.edgeVectorA.z.oclAsType(Real) + o.edgeVectorB.z.oclAsType(Real) + o.edgeVectorC.z.oclAsType(Real)
+      } in
+
+      let boxMinX : Real = boxXs.min() in
+      let boxMaxX : Real = boxXs.max() in
+      let boxMinY : Real = boxYs.min() in
+      let boxMaxY : Real = boxYs.max() in
+      let boxMinZ : Real = boxZs.min() in
+      let boxMaxZ : Real = boxZs.max() in
+
+      let separatedInZ : Boolean =
+        cylMaxZ < boxMinZ or boxMaxZ < cylMinZ
+      in
+
+      let closestX : Real =
+        if self.bottomCenter.x.oclAsType(Real) < boxMinX then boxMinX
+        else if self.bottomCenter.x.oclAsType(Real) > boxMaxX then boxMaxX
+        else self.bottomCenter.x.oclAsType(Real)
+        endif endif
+      in
+      let closestY : Real =
+        if self.bottomCenter.y.oclAsType(Real) < boxMinY then boxMinY
+        else if self.bottomCenter.y.oclAsType(Real) > boxMaxY then boxMaxY
+        else self.bottomCenter.y.oclAsType(Real)
+        endif endif
+      in
+
+      let dx : Real = self.bottomCenter.x.oclAsType(Real) - closestX in
+      let dy : Real = self.bottomCenter.y.oclAsType(Real) - closestY in
+      let separatedInXY : Boolean =
+        dx * dx + dy * dy > self.radius.oclAsType(Real) * self.radius.oclAsType(Real)
+      in
+
+      separatedInZ or separatedInXY
+    )
+
+context brakesystem::BrakeDisk
+inv ventilated: 
+  self.diameterInMM >= 336 implies self.ventilated == false

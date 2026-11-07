@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<correspondence:Correspondences xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:correspondence="http://vitruv.tools/metamodels/change/correspondence/1.0" xmlns:correspondence_1="http://vitruv.tools/metamodels/dsls/reactions/runtime/correspondence/1.0">
+  <correspondences xsi:type="correspondence_1:ReactionsCorrespondence">
+    <leftEObjects href="brakesystem.brakesystem#//@BrakeComponents.0"/>
+    <rightEObjects href="brake_disc_and_caliper.cad#//@namespaces.0"/>
+  </correspondences>
+  <correspondences xsi:type="correspondence_1:ReactionsCorrespondence">
+    <leftEObjects href="brakesystem.brakesystem#//@BrakeComponents.2"/>
+    <rightEObjects href="brake_disc_and_caliper.cad#//@namespaces.2"/>
+  </correspondences>
+  <correspondences xsi:type="correspondence_1:ReactionsCorrespondence">
+    <leftEObjects href="brakesystem.brakesystem#//@BrakeComponents.1"/>
+    <rightEObjects href="brake_disc_and_caliper.cad#//@namespaces.1"/>
+  </correspondences>
+  <correspondences xsi:type="correspondence_1:ReactionsCorrespondence">
+    <leftEObjects href="clamp_force_simulation.simulink#//@contains.1"/>
+    <rightEObjects href="brakesystem.brakesystem#//@BrakeComponents.1"/>
+  </correspondences>
+  <correspondences xsi:type="correspondence_1:ReactionsCorrespondence">
+    <leftEObjects href="clamp_force_simulation.simulink#//@contains.0"/>
+    <rightEObjects href="brakesystem.brakesystem#//@BrakeComponents.1"/>
+  </correspondences>
+  <correspondences xsi:type="correspondence_1:ReactionsCorrespondence">
+    <leftEObjects href="brakesystem.brakesystem#//@BrakeComponents.0"/>
+    <rightEObjects href="uncertainties.uncertainty#//@uncertainties.0"/>
+  </correspondences>
+</correspondence:Correspondences>

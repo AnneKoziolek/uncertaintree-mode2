@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cad:CAD_Model xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:cad="http://vitruv.tools/cad/model">
+  <namespaces id="id3_front_brake_disc" name="id3_front_brake_disc_namespace">
+    <shapes xsi:type="cad:Cylinder" id="id3_front_brake_disc_cylinder" name="brakedisc_cylinder" radius="165.0">
+      <bottomCenter id="id3_front_brake_disc_cylinder_coordinate_bottom" name="Bottom Coordinate"/>
+      <topCenter id="id3_front_brake_disc_cylinder_coordinate_top" name="Top Coordinate" z="23.0"/>
+    </shapes>
+  </namespaces>
+  <namespaces id="id3_front_left_caliper" name="id3_front_left_caliper_namespace">
+    <shapes xsi:type="cad:Box" id="id3_front_left_caliper_box" name="caliper_box">
+      <edgeVectorA x="10.0"/>
+      <edgeVectorB z="43.0"/>
+      <edgeVectorC y="-90.0"/>
+      <origin id="id3_front_left_caliper_box_origin_coordinate" name="origin_coordiante" x="165.0" y="45.0" z="-10.0"/>
+    </shapes>
+  </namespaces>
+  <namespaces id="id3_front_brake_pad_namespace" name="id3_front_brake_pad_namespace">
+    <shapes xsi:type="cad:Box" id="id3_front_left_caliper_pad_upper_pad_box" name="Front Brake Pad upper box">
+      <edgeVectorA x="-65.0"/>
+      <edgeVectorB y="-90.0"/>
+      <edgeVectorC z="6.0"/>
+      <origin id="id3_front_left_caliper_pad_upper_pad_box_origin_coordinate" name="Upper Pad origin coordinate" x="160.0" y="45.0" z="29.0"/>
+    </shapes>
+    <shapes xsi:type="cad:Box" id="id3_front_left_caliper_pad_lower_pad_box" name="Front Brake Pad lower box">
+      <edgeVectorA x="-65.0"/>
+      <edgeVectorB y="-90.0"/>
+      <edgeVectorC z="-6.0"/>
+      <origin id="id3_front_left_caliper_pad_lower_pad_box_origin_coordinate" x="160.0" y="45.0" z="-6.0"/>
+    </shapes>
+    <shapes xsi:type="cad:Box" id="pad_wear_sensor_box" name="Front Brake Pad wear sensor" description="Attached to upper brake pad">
+      <edgeVectorA y="5.0"/>
+      <edgeVectorB x="5.0"/>
+      <edgeVectorC z="5.0"/>
+      <origin id="id3_front_left_caliper_pad_wear_sensor_box_origin_coordinate" name="Wear Sensor origin" x="95.0" y="-45.0" z="36.0"/>
+    </shapes>
+  </namespaces>
+</cad:CAD_Model>

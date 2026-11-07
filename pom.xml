@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  UncertainTree Mode 2 experiments: CoCoPath-style concolic exploration of the
+  UncertainTree brake case on Bell's Knarr/Galette (knarr-integration).
+
+  Build only against the isolated repository:
+    mvn -Dmaven.repo.local=/workspace/.m2-bell verify
+  Integration tests (*ITCase) run inside Knarr's Galette-instrumented JDK
+  (/workspace/knarr-bell/knarr/target/galette/java) with the Galette agent.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>parent</artifactId>
+        <version>3.2.2</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>uncertaintree.mode2</groupId>
+    <artifactId>uncertaintree-mode2</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+
+    <properties>
+        <maven.compiler.release>17</maven.compiler.release>
+        <galette.version>1.1.0-SNAPSHOT</galette.version>
+        <knarr.version>0.0.3-SNAPSHOT</knarr.version>
+        <ut.version>0.1.0-SNAPSHOT</ut.version>
+        <vitruv.version>3.1.2</vitruv.version>
+        <!-- Reuse Knarr's instrumented JDK (built by galette-maven-plugin 1.1.0 from the
+             same galette-bell build as the agent below). -->
+        <galette.java>/workspace/knarr-bell/knarr/target/galette/java</galette.java>
+        <galette.agentJar>${edu.neu.ccs.prl.galette:galette-agent:jar}</galette.agentJar>
+        <multimodelocl.jar>/workspace/UncertainTreeDev/BrakeCaseStudy/Maven_Project/lib/multimodelocl.jar</multimodelocl.jar>
+        <!-- Record path constraints only for branches in the Reactions-generated CPRs
+             (see knarr-bell RecordingScope). Set empty to record everything. -->
+        <knarr.record.prefixes>mir.</knarr.record.prefixes>
+        <checkstyle.skip>true</checkstyle.skip>
+        <spotless.check.skip>true</spotless.check.skip>
+    </properties>
+
+    <!-- Versions as in UncertainTreeDev BrakeCaseStudy/Maven_Project/pom.xml (Vitruv 3.1.2) -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency><groupId>tools.vitruv</groupId><artifactId>tools.vitruv.change.atomic</artifactId><version>${vitruv.version}</version></dependency>
+            <dependency><groupId>tools.vitruv</groupId><artifactId>tools.vitruv.change.composite</artifactId><version>${vitruv.version}</version></dependency>
+            <dependency><groupId>tools.vitruv</groupId><artifactId>tools.vitruv.change.interaction</artifactId><version>${vitruv.version}</version></dependency>
+            <dependency><groupId>tools.vitruv</groupId><artifactId>tools.vitruv.change.propagation</artifactId><version>${vitruv.version}</version></dependency>
+            <dependency><groupId>tools.vitruv</groupId><artifactId>tools.vitruv.change.testutils.integration</artifactId><version>${vitruv.version}</version></dependency>
+            <dependency><groupId>tools.vitruv</groupId><artifactId>tools.vitruv.dsls.reactions.runtime</artifactId><version>${vitruv.version}</version></dependency>
+            <dependency><groupId>tools.vitruv</groupId><artifactId>tools.vitruv.framework.views</artifactId><version>${vitruv.version}</version></dependency>
+            <dependency><groupId>tools.vitruv</groupId><artifactId>tools.vitruv.framework.vsum</artifactId><version>${vitruv.version}</version></dependency>
+            <dependency><groupId>org.eclipse.emf</groupId><artifactId>org.eclipse.emf.common</artifactId><version>2.41.0</version></dependency>
+            <dependency><groupId>org.eclipse.emf</groupId><artifactId>org.eclipse.emf.ecore</artifactId><version>2.38.0</version></dependency>
+            <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter-api</artifactId><version>5.13.1</version></dependency>
+            <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter-engine</artifactId><version>5.13.1</version></dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Knarr on Galette (Bell), + CmpDifference fix on cocopath-uncertaintree -->
+        <dependency>
+            <groupId>edu.gmu.swe.knarr</groupId>
+            <artifactId>Knarr</artifactId>
+            <version>${knarr.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>edu.neu.ccs.prl.galette</groupId>
+            <artifactId>galette-agent</artifactId>
+            <version>${galette.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- UncertainTree brake case study (master @ 7b067a6, installed into .m2-bell) -->
+        <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.methodologisttemplate.vsum</artifactId>
+            <version>${ut.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.methodologisttemplate.consistency</artifactId>
+            <version>${ut.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.methodologisttemplate.model</artifactId>
+            <version>${ut.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv.shared</groupId>
+            <artifactId>uncertaintree-core</artifactId>
+            <version>${ut.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv.shared</groupId>
+            <artifactId>uncertaintree-ocl</artifactId>
+            <version>${ut.version}</version>
+        </dependency>
+        <!-- uncertaintree-ocl's installed pom is invalid (relative systemPath), so its
+             transitive dependencies are dropped; declare them here. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.2</version>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv.multimodelocl</groupId>
+            <artifactId>multimodelocl-language</artifactId>
+            <version>1.0.2-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${multimodelocl.jar}</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.change.interaction</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.change.propagation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.change.testutils.integration</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.framework.views</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.framework.vsum</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.emf</groupId>
+            <artifactId>org.eclipse.emf.ecore</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.1.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <jvm>${galette.java}/bin/java</jvm>
+                    <argLine>
+                        -Xbootclasspath/a:${galette.agentJar}
+                        -javaagent:${galette.agentJar}
+                        --add-exports java.base/jdk.internal.misc=ALL-UNNAMED
+                        --add-opens java.base/java.lang=ALL-UNNAMED
+                        --add-opens java.base/edu.neu.ccs.prl.galette.internal.transform=ALL-UNNAMED
+                        -Xmx4g
+                        -Dknarr.record.prefixes=${knarr.record.prefixes}
+                    </argLine>
+                    <reuseForks>false</reuseForks>
+                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
