@@ -89,10 +89,16 @@ public class Cps1SymbolicDiameterITCase {
             return "<none>";
         }
         int n = PathUtils.getCurPC().branchConstraints.size();
-        if (n > 50) {
-            return n + " branch constraints (too many to print)";
+        StringBuilder sb = new StringBuilder(n + " branch constraints, PC depth " + Exprs.depth(e));
+        int k = 0;
+        for (Expression b : PathUtils.getCurPC().branchConstraints) {
+            if (k++ == 12) {
+                sb.append("\n      ...");
+                break;
+            }
+            sb.append("\n      [depth ").append(Exprs.depth(b)).append("] ").append(Exprs.brief(b, 7));
         }
-        return n + " branch constraints: " + e;
+        return sb.toString();
     }
 
     @Test
@@ -117,17 +123,28 @@ public class Cps1SymbolicDiameterITCase {
         System.out.println("[mode2] nominal diameterInMM=" + disk.getDiameterInMM() + " radius=" + cyl.getRadius());
 
         VitruvTestViewDefinition def = new VitruvTestViewDefinition(vsumState, CPS, ROOT_TYPES);
+        // Two symbolic commits in the same JVM: the first pays one-time costs (Galette
+        // instrumentation of EMF/Vitruvius classes on first load), the second shows the
+        // per-path cost a concolic loop would pay.
+        runSymbolicCommit(util, def, diskHandle, cylHandle, 325, 162.5f);
+        runSymbolicCommit(util, def, diskHandle, cylHandle, 331, 165.5f);
+    }
+
+    private static void runSymbolicCommit(VsumUtils util, VitruvTestViewDefinition def, String diskHandle,
+            String cylHandle, int concrete, float expectedRadius) {
         long t0 = System.nanoTime();
         try (VsumViewSession session =
                 new CopyingVitruvViewProvider(util, new IdBasedVsumObjectResolver()).checkoutIsolated(def)) {
+            long tCheckout = System.nanoTime();
             BrakeDisk d = (BrakeDisk) session.resolve(diskHandle);
             // Listener only now: VSUM loading and checkout are not part of the analysis.
             SymbolicListener.setListener(new PathConstraintListener());
-            int symbolicDiameter = Symbolicator.symbolic("diameterInMM", 325);
+            int symbolicDiameter = Symbolicator.symbolic("diameterInMM", concrete);
             d.setDiameterInMM(symbolicDiameter);
-            System.out.println("[mode2] PC after eSet: " + pc());
+            System.out.println("[mode2] d=" + concrete + " PC after eSet: " + pc());
             session.commit();
-            System.out.println("[mode2] PC after commit (CPRs ran): " + pc());
+            long tCommit = System.nanoTime();
+            System.out.println("[mode2] d=" + concrete + " PC after commit (CPRs ran): " + pc());
 
             Cylinder c = (Cylinder) session.resolve(cylHandle);
             float radius = c.getRadius();
@@ -136,17 +153,19 @@ public class Cps1SymbolicDiameterITCase {
             Expression diameterExpr = Symbolicator.getExpression(committedDiameter);
             SymbolicListener.setListener(null);
 
-            System.out.println("[mode2] committed diameterInMM=" + committedDiameter + " expr=" + diameterExpr);
-            System.out.println("[mode2] cylinder radius=" + radius + " expr=" + radiusExpr);
-            System.out.printf("[mode2] commit+propagation took %.1f ms%n", (System.nanoTime() - t0) / 1e6);
+            System.out.println("[mode2] d=" + concrete + " committed diameterInMM=" + committedDiameter
+                    + " expr=" + diameterExpr);
+            System.out.println("[mode2] d=" + concrete + " cylinder radius=" + radius + " expr=" + radiusExpr);
+            System.out.printf("[mode2] d=%d timing: checkout %.1f ms, eSet+commit+propagation %.1f ms%n", concrete,
+                    (tCheckout - t0) / 1e6, (tCommit - tCheckout) / 1e6);
+            System.out.println("[mode2] d=" + concrete + " " + edu.gmu.swe.knarr.runtime.RecordingScope.stats());
 
-            Assertions.assertEquals(162.5f, radius, 0.0001f, "concrete radius for d=325");
+            Assertions.assertEquals(expectedRadius, radius, 0.0001f, "concrete radius");
             Assertions.assertNotNull(diameterExpr, "symbolic tag must survive Vitruvius change propagation on the disk");
             Assertions.assertNotNull(radiusExpr, "CPR-written radius must carry a symbolic expression");
         } finally {
             SymbolicListener.setListener(null);
             Symbolicator.reset();
         }
-        Files.createDirectories(Path.of("target"));
     }
 }

@@ -35,9 +35,10 @@
         <galette.java>/workspace/knarr-bell/knarr/target/galette/java</galette.java>
         <galette.agentJar>${edu.neu.ccs.prl.galette:galette-agent:jar}</galette.agentJar>
         <multimodelocl.jar>/workspace/UncertainTreeDev/BrakeCaseStudy/Maven_Project/lib/multimodelocl.jar</multimodelocl.jar>
-        <!-- Record path constraints only for branches in the Reactions-generated CPRs
-             (see knarr-bell RecordingScope). Set empty to record everything. -->
-        <knarr.record.prefixes>mir.</knarr.record.prefixes>
+        <!-- Report branch decisions only from the Reactions-generated CPRs (mir/) and the
+             OCL evaluator; Galette emits no branch hooks elsewhere and JDK branches are
+             switched off (galette-bell TagPropagator branch modes). Empty = everything. -->
+        <branch.prefixes>mir/,tools/vitruv/multimodelocl/</branch.prefixes>
         <checkstyle.skip>true</checkstyle.skip>
         <spotless.check.skip>true</spotless.check.skip>
     </properties>
@@ -138,6 +139,13 @@
             <groupId>org.eclipse.emf</groupId>
             <artifactId>org.eclipse.emf.ecore</artifactId>
         </dependency>
+        <!-- Z3 for Mode2SolverServer (plain JVM); Green's installed pom is invalid, so
+             its z3-turnkey dependency is not inherited. -->
+        <dependency>
+            <groupId>io.github.tudo-aqua</groupId>
+            <artifactId>z3-turnkey</artifactId>
+            <version>4.8.14</version>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
@@ -183,10 +191,15 @@
                         --add-exports java.base/jdk.internal.misc=ALL-UNNAMED
                         --add-opens java.base/java.lang=ALL-UNNAMED
                         --add-opens java.base/edu.neu.ccs.prl.galette.internal.transform=ALL-UNNAMED
-                        -Xmx4g
-                        -Dknarr.record.prefixes=${knarr.record.prefixes}
+                        -Xmx4g -XX:MaxJavaStackTraceDepth=200000
+                        -Dgalette.symbolic.branchPrefixes=${branch.prefixes}
+                        -Dgalette.cache=${project.basedir}/target/galette-cache
                     </argLine>
                     <reuseForks>false</reuseForks>
+                    <systemPropertyVariables>
+                        <!-- plain (uninstrumented) JDK for the solver process -->
+                        <mode2.plainJava>${java.home}</mode2.plainJava>
+                    </systemPropertyVariables>
                     <redirectTestOutputToFile>true</redirectTestOutputToFile>
                 </configuration>
             </plugin>
