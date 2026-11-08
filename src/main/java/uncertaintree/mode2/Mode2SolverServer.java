@@ -39,6 +39,9 @@ public final class Mode2SolverServer {
         Solver solver = ctx.mkSolver();
         long queries = 0;
         long nanos = 0;
+        // Diagnosis: with -Dmode2.dumpSlowQueries=<dir>, every query slower than 200 ms is
+        // written there as SMT-LIB (for offline experiments with encodings and tactics).
+        String dumpDir = System.getProperty("mode2.dumpSlowQueries");
         try (ServerSocket ss = new ServerSocket(port)) {
             System.out.println("MODE2-SOLVER READY " + port);
             System.out.flush();
@@ -68,8 +71,15 @@ public final class Mode2SolverServer {
                                 model.put(v.getKey().toString(), decimal(m.eval(v.getValue(), true)));
                             }
                         }
+                        long q = System.nanoTime() - q0;
+                        if (dumpDir != null && !dumpDir.isBlank() && q > 200_000_000L) {
+                            java.nio.file.Files.createDirectories(java.nio.file.Path.of(dumpDir));
+                            java.nio.file.Files.writeString(java.nio.file.Path.of(dumpDir,
+                                    String.format("q%04d-%dms-%s.smt2", queries, q / 1_000_000, st)),
+                                    solver.toString() + "\n(check-sat)\n");
+                        }
                         solver.pop();
-                        nanos += System.nanoTime() - q0;
+                        nanos += q;
                         if (++queries % 25 == 0) {
                             System.out.printf("server: %d queries, %.1f ms per query in Z3%n", queries, nanos / 1e6 / queries);
                         }

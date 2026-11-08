@@ -38,8 +38,14 @@ public final class Mode2Solver implements AutoCloseable {
     public Mode2Solver(int port) throws Exception {
         this.port = port;
         String plainJava = System.getProperty("mode2.plainJava") + File.separator + "bin" + File.separator + "java";
-        ProcessBuilder pb = new ProcessBuilder(plainJava, "-cp", System.getProperty("java.class.path"),
-                Mode2SolverServer.class.getName(), String.valueOf(port));
+        java.util.List<String> cmd = new java.util.ArrayList<>(java.util.List.of(plainJava));
+        String dump = System.getProperty("mode2.dumpSlowQueries");
+        if (dump != null && !dump.isBlank()) {
+            cmd.add("-Dmode2.dumpSlowQueries=" + System.getProperty("mode2.dumpSlowQueries"));
+        }
+        cmd.addAll(java.util.List.of("-cp", System.getProperty("java.class.path"),
+                Mode2SolverServer.class.getName(), String.valueOf(port)));
+        ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         process = pb.start();
         BufferedReader r = new BufferedReader(new InputStreamReader(process.getInputStream()));

@@ -38,8 +38,8 @@ import uncertaintree.vsum.execution.CopyingVitruvViewProvider;
 import uncertaintree.vsum.execution.IdBasedVsumObjectResolver;
 import uncertaintree.vsum.execution.VitruvTestViewDefinition;
 import uncertaintree.vsum.execution.VsumViewSession;
-import za.ac.sun.cs.green.expr.BVConstant;
-import za.ac.sun.cs.green.expr.BVVariable;
+import za.ac.sun.cs.green.expr.IntConstant;
+import za.ac.sun.cs.green.expr.IntVariable;
 import za.ac.sun.cs.green.expr.BinaryOperation;
 import za.ac.sun.cs.green.expr.Expression;
 import za.ac.sun.cs.green.expr.Operation.Operator;
@@ -270,7 +270,7 @@ public final class Mode2Engine {
                 int v = input.get(src.label);
                 if (v == src.nominal) {
                     // EMF touch: no change, no propagation. Leave the value and record x == nominal.
-                    fixed.add(new BinaryOperation(Operator.EQ, var(src), new BVConstant(v, 32)));
+                    fixed.add(new BinaryOperation(Operator.EQ, var(src), new IntConstant(v)));
                     continue;
                 }
                 EStructuralFeature f = element.eClass().getEStructuralFeature(src.attribute);
@@ -506,14 +506,14 @@ public final class Mode2Engine {
         for (UncertaintySource s : sources) {
             d = and(d, and(ge(s, s.min), le(s, s.max)));
         }
-        return d == null ? new BinaryOperation(Operator.EQ, new BVConstant(0, 32), new BVConstant(0, 32)) : d;
+        return d == null ? new BinaryOperation(Operator.EQ, new IntConstant(0), new IntConstant(0)) : d;
     }
 
     private Expression preferNonNominal() {
         Expression d = null;
         for (UncertaintySource s : sources) {
             if (s.hasAlternatives()) {
-                d = and(d, new BinaryOperation(Operator.NE, var(s), new BVConstant(s.nominal, 32)));
+                d = and(d, new BinaryOperation(Operator.NE, var(s), new IntConstant(s.nominal)));
             }
         }
         return d;
@@ -522,7 +522,7 @@ public final class Mode2Engine {
     private Expression point(Map<String, Integer> input) {
         Expression d = null;
         for (UncertaintySource s : sources) {
-            d = and(d, new BinaryOperation(Operator.EQ, var(s), new BVConstant(input.get(s.label), 32)));
+            d = and(d, new BinaryOperation(Operator.EQ, var(s), new IntConstant(input.get(s.label))));
         }
         return d;
     }
@@ -531,16 +531,17 @@ public final class Mode2Engine {
         return conj(p.branches, p.branches.size());
     }
 
-    private static BVVariable var(UncertaintySource s) {
-        return new BVVariable(s.label, 32);
+    /** Bounded integer variable (Z3 Int with the annotation's domain), as Knarr's symbolicInRange creates it. */
+    private static IntVariable var(UncertaintySource s) {
+        return new IntVariable(s.label, s.min, s.max);
     }
 
     private static Expression ge(UncertaintySource s, int v) {
-        return new BinaryOperation(Operator.GE, var(s), new BVConstant(v, 32));
+        return new BinaryOperation(Operator.GE, var(s), new IntConstant(v));
     }
 
     private static Expression le(UncertaintySource s, int v) {
-        return new BinaryOperation(Operator.LE, var(s), new BVConstant(v, 32));
+        return new BinaryOperation(Operator.LE, var(s), new IntConstant(v));
     }
 
     private static Expression not(Expression e) {

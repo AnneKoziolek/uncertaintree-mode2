@@ -38,6 +38,8 @@
         <!-- Report branch decisions only from the Reactions-generated CPRs (mir/) and the
              OCL evaluator; Galette emits no branch hooks elsewhere and JDK branches are
              switched off (galette-bell TagPropagator branch modes). Empty = everything. -->
+        <!-- Diagnosis: directory for SMT-LIB dumps of slow solver queries; empty = off -->
+        <mode2.dumpSlowQueries></mode2.dumpSlowQueries>
         <branch.prefixes>mir/,tools/vitruv/multimodelocl/</branch.prefixes>
         <checkstyle.skip>true</checkstyle.skip>
         <spotless.check.skip>true</spotless.check.skip>
@@ -199,6 +201,7 @@
                     <systemPropertyVariables>
                         <!-- plain (uninstrumented) JDK for the solver process -->
                         <mode2.plainJava>${java.home}</mode2.plainJava>
+                        <mode2.dumpSlowQueries>${mode2.dumpSlowQueries}</mode2.dumpSlowQueries>
                     </systemPropertyVariables>
                     <redirectTestOutputToFile>true</redirectTestOutputToFile>
                 </configuration>
