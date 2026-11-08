@@ -16,7 +16,23 @@ public final class Mode2Result {
     /** Uncertainties that Mode 2 does not treat symbolically (kept at their nominal value). */
     public List<String> unsupported = new ArrayList<>();
     public List<Region> regions = new ArrayList<>();
+    public Nominal nominal = new Nominal();
     public Stats stats = new Stats();
+
+    /**
+     * The nominal state, evaluated on the unchanged model (no propagation: setting the current
+     * value is no change for Vitruvius). Its verdicts equal those of the region containing the
+     * nominal point iff the nominal state is a fixpoint of the CPRs (see docs/mode2-concepts.md).
+     */
+    public static final class Nominal {
+        public Map<String, Integer> values = new LinkedHashMap<>();
+        public Map<String, Boolean> verdicts = new LinkedHashMap<>();
+        public boolean consistent;
+        /** True if the region containing the nominal point has the same verdicts. */
+        public boolean fixpointConfirmed;
+        /** Index into regions of the region that contains the nominal point (after a split: the point region). */
+        public int region = -1;
+    }
 
     public static final class Source {
         public String variable;
@@ -41,6 +57,11 @@ public final class Mode2Result {
         /** Model attributes whose value depends on uncertain variables, with their expression. */
         public List<Affected> affected = new ArrayList<>();
         public Map<String, Integer> representative = new LinkedHashMap<>();
+        /** True if an operation on a symbolic value overflowed on this path (OverflowMonitor). */
+        public boolean approximate;
+        public String approximateReason;
+        /** Set when the nominal point was split off this region (fixpoint check failed). */
+        public boolean excludesNominal;
     }
 
     public static final class Affected {

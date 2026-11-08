@@ -1,5 +1,6 @@
 package uncertaintree.mode2;
 
+import edu.gmu.swe.knarr.runtime.OverflowMonitor;
 import edu.gmu.swe.knarr.runtime.PathConstraintListener;
 import edu.gmu.swe.knarr.runtime.PathUtils;
 import edu.gmu.swe.knarr.runtime.Symbolicator;
@@ -84,6 +85,8 @@ public final class Mode2Engine {
         final Map<String, Boolean> verdicts = new LinkedHashMap<>();
         final List<Mode2Result.Affected> affected = new ArrayList<>();
         long millis;
+        int overflows;
+        String overflow;
 
         PathRun(Map<String, Integer> input) {
             this.input = input;
@@ -158,6 +161,7 @@ public final class Mode2Engine {
                 result.regions.add(region(p));
                 result.stats.pathMillis.add(p.millis);
             }
+            nominalCheck(paths);
             result.stats.concreteExecutions = paths.size();
             result.stats.solverQueries = solver.queries;
             result.stats.solverMillis = solver.nanos / 1_000_000;
@@ -289,6 +293,8 @@ public final class Mode2Engine {
             p.branches.addAll(fixed);
             p.branches.addAll(PathUtils.getCurPC().branchConstraints);
             p.affected.addAll(affected(resources));
+            p.overflows = OverflowMonitor.count();
+            p.overflow = OverflowMonitor.first();
         } finally {
             SymbolicListener.setListener(null);
             Symbolicator.reset();
@@ -362,7 +368,68 @@ public final class Mode2Engine {
         boolean pcInBox = box == null || !sat(and(pc, not(box)));
         boolean boxInPc = box == null || !sat(and(and(domain(), box), not(pc)));
         r.extentType = pcInBox && boxInPc ? "box" : "predicate";
+        if (p.overflows > 0) {
+            r.approximate = true;
+            r.approximateReason = p.overflows + " overflow(s) on symbolic values, first: " + p.overflow;
+        }
         return r;
+    }
+
+    /**
+     * Evaluates the nominal state on the unchanged model and compares it with the region that
+     * contains the nominal point. Different verdicts mean the nominal state is not a fixpoint of
+     * the CPRs; the nominal point then becomes a region of its own.
+     */
+    private void nominalCheck(List<PathRun> paths) throws Exception {
+        Map<String, Integer> nominal = new LinkedHashMap<>();
+        for (UncertaintySource s : sources) {
+            nominal.put(s.label, s.nominal);
+        }
+        Map<String, Boolean> verdicts = new LinkedHashMap<>();
+        VitruvTestViewDefinition def = new VitruvTestViewDefinition(config.vsumState, config.cps, config.rootTypes);
+        try (VsumViewSession session =
+                new CopyingVitruvViewProvider(util, new IdBasedVsumObjectResolver()).checkoutIsolated(def)) {
+            Collection<Resource> resources = sources.isEmpty()
+                    ? List.of()
+                    : session.resolve(sources.get(0).handle).eResource().getResourceSet().getResources();
+            InMemoryMetamodelWrapper wrapper = new InMemoryMetamodelWrapper(packages, resources);
+            for (String inv : invariants) {
+                int at = inv.indexOf("inv ") + 4;
+                String name = inv.substring(at, inv.indexOf(':', at)).trim();
+                OCLCompiler compiler = new OCLCompiler(wrapper, null);
+                Value v = compiler.compile(inv);
+                verdicts.put(name, !compiler.hasErrors() && verdict(v));
+            }
+        }
+        Mode2Result.Nominal n = result.nominal;
+        n.values.putAll(nominal);
+        n.verdicts.putAll(verdicts);
+        n.consistent = verdicts.values().stream().allMatch(Boolean::booleanValue);
+        for (int i = 0; i < paths.size(); i++) {
+            if (sat(and(and(domain(), pc(paths.get(i))), point(nominal)))) {
+                n.region = i;
+                break;
+            }
+        }
+        n.fixpointConfirmed = n.region >= 0 && result.regions.get(n.region).verdicts.equals(verdicts);
+        if (!n.fixpointConfirmed) {
+            if (n.region >= 0) {
+                Mode2Result.Region from = result.regions.get(n.region);
+                from.excludesNominal = true;
+                from.extentType = "predicate";
+            }
+            Mode2Result.Region point = new Mode2Result.Region();
+            point.extentType = "box";
+            for (UncertaintySource s : sources) {
+                point.intervals.put(s.label, new int[] {s.nominal, s.nominal});
+            }
+            point.representative.putAll(nominal);
+            point.verdicts.putAll(verdicts);
+            point.consistent = n.consistent;
+            point.pathCondition.add("nominal state (unchanged model)");
+            result.regions.add(point);
+            n.region = result.regions.size() - 1;
+        }
     }
 
     /** Smallest (lower) or largest value of s within pc, by binary search with the solver. */

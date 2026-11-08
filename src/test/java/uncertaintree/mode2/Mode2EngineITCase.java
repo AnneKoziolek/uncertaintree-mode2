@@ -58,6 +58,10 @@ public class Mode2EngineITCase {
             System.out.println("[mode2-result] " + g.extentType + " " + iv + ": " + (g.consistent ? "CONSISTENT" : "INCONSISTENT")
                     + " " + g.verdicts + ", affected " + g.affected.size());
         }
+        System.out.println("[mode2-result] nominal " + r.nominal.values + ": " + (r.nominal.consistent ? "CONSISTENT" : "INCONSISTENT")
+                + ", fixpoint confirmed: " + r.nominal.fixpointConfirmed);
+        Assertions.assertTrue(r.nominal.fixpointConfirmed, "nominal state of the brake example is a CPR fixpoint");
+        Assertions.assertTrue(r.regions.stream().noneMatch(g -> g.approximate), "no overflow expected in the brake example");
         System.out.printf("[mode2-result] executions %d, divergences %d, solver %d queries in %d ms, total %d ms%n",
                 r.stats.concreteExecutions, r.stats.divergences, r.stats.solverQueries, r.stats.solverMillis,
                 r.stats.totalMillis);
