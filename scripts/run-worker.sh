@@ -6,13 +6,14 @@
 #   POST http://127.0.0.1:<port>/analyze   (body: Mode2Worker.Request as JSON)
 #
 # Requires the Bell stack in /workspace/.m2-bell and Knarr's instrumented JDK
-# (see docs/mode2-log.md in the stack repo, section "Reproduce").
+# (see docs/mode2-log.md in the stack repo, section "Reproduce"). Other locations:
+# MODE2_REPO (Maven repository), MODE2_JAVA (instrumented java binary).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PORT="${1:-8099}"
 WARMUP="${2:-}"
-REPO=/workspace/.m2-bell
-JAVA=/workspace/knarr-bell/knarr/target/galette/java/bin/java
+REPO="${MODE2_REPO:-/workspace/.m2-bell}"
+JAVA="${MODE2_JAVA:-/workspace/knarr-bell/knarr/target/galette/java/bin/java}"
 AGENT="$REPO/edu/neu/ccs/prl/galette/galette-agent/1.1.0-SNAPSHOT/galette-agent-1.1.0-SNAPSHOT.jar"
 PREFIXES="$(sed -n 's:.*<branch.prefixes>\(.*\)</branch.prefixes>.*:\1:p' pom.xml)"
 

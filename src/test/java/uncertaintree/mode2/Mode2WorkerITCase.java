@@ -45,7 +45,7 @@ public class Mode2WorkerITCase {
             req.solverPort = 9431;
             String body = JSON.writeValueAsString(req);
 
-            for (String round : List.of("cold", "warm")) {
+            for (String round : List.of("cold", "warm", "warm2", "warm3")) {
                 long t = System.nanoTime();
                 HttpResponse<String> resp = http.send(HttpRequest.newBuilder(URI.create(base + "/analyze"))
                         .header("Content-Type", "application/json")

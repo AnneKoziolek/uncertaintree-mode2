@@ -132,9 +132,13 @@ public final class Mode2Worker {
         c.solver = solver;
         c.maxPaths = req.maxPaths;
         c.incomingChanges = req.incomingChanges;
-        Mode2Result r = new Mode2Engine(c).analyze();
-        analyses++;
-        return r;
+        try {
+            Mode2Result r = new Mode2Engine(c).analyze();
+            analyses++;
+            return r;
+        } finally {
+            solver.endAnalysis(); // a fresh Z3 Solver for the next analysis (see endAnalysis)
+        }
     }
 
     private static void register(List<String> packageInterfaces) throws ReflectiveOperationException {

@@ -144,6 +144,28 @@ public final class Mode2Solver implements AutoCloseable {
         }
     }
 
+    /**
+     * Ends the connection of one analysis; the next query opens a new one. The server keeps one
+     * incremental Solver per connection, and one Solver over several analyses made Z3 5-9 times
+     * slower on the same queries (2026-11-08: a worker that kept its connection took 6.7 s, then
+     * 58, 29 and 19 s for the same request). The solver process and its Z3 context stay warm.
+     */
+    public void endAnalysis() {
+        if (conn == null) {
+            return;
+        }
+        boolean prev = setSerializationPropagation(false);
+        try {
+            conn.close();
+        } catch (Exception ignored) {
+        } finally {
+            conn = null;
+            out = null;
+            in = null;
+            setSerializationPropagation(prev);
+        }
+    }
+
     @Override
     public void close() throws Exception {
         long t = System.nanoTime();
