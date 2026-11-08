@@ -118,6 +118,11 @@ public final class Mode2Engine {
         final List<Expression> branches = new ArrayList<>();
         final Map<String, Boolean> verdicts = new LinkedHashMap<>();
         final List<Mode2Result.Affected> affected = new ArrayList<>();
+        /** Per annotated attribute (index into annotated): status and expression after propagation. */
+        final Map<Integer, String[]> annotationStates = new LinkedHashMap<>();
+        /** Expressions behind "rewritten" states, for the identity check. */
+        final Map<Integer, Expression> annotationExprs = new LinkedHashMap<>();
+        Map<String, Integer> structure = Map.of();
         long millis;
         int overflows;
         String overflow;
@@ -132,6 +137,11 @@ public final class Mode2Engine {
     private final IdAttributeHandleStrategy handles = new IdAttributeHandleStrategy();
     private final List<UncertaintySource> sources = new ArrayList<>();
     private final Mode2Result result = new Mode2Result();
+    /** Every annotated attribute dimension (symbolic or not), for the dependency checks. */
+    private final List<Mode2Result.AnnotationCheck> annotated = new ArrayList<>();
+    /** For each entry of annotated: the source it is (or null if not symbolic). */
+    private final List<UncertaintySource> annotatedSource = new ArrayList<>();
+    private Map<String, Integer> nominalStructure = Map.of();
     private List<OclPipeline> invariants;
     private Map<String, EPackage> packages;
     private Mode2Solver solver;
@@ -226,6 +236,11 @@ public final class Mode2Engine {
             long tn = System.nanoTime();
             nominalCheck(paths);
             phase("nominalCheck", tn);
+            for (int i = 0; i < paths.size(); i++) {
+                diffStructure(result.regions.get(i), paths.get(i).structure);
+            }
+            varyingStructure(paths);
+            summarizeAnnotations(paths);
             result.stats.concreteExecutions = paths.size();
             result.stats.solverQueries = solver.queries - queries0;
             result.stats.solverMillis = (solver.nanos - nanos0) / 1_000_000;
@@ -264,8 +279,14 @@ public final class Mode2Engine {
                     continue;
                 }
                 Class<?> type = dim.getJavaType();
+                Mode2Result.AnnotationCheck check = new Mode2Result.AnnotationCheck();
+                check.uncertainty = u.getId();
+                check.element = safeHandle(element);
+                check.attribute = dim.getAttributeName();
+                annotated.add(check);
                 if (type != int.class && type != Integer.class) {
                     result.unsupported.add(what + ": type " + type + " not yet symbolic (kept nominal)");
+                    annotatedSource.add(null);
                     continue;
                 }
                 int min = Integer.MAX_VALUE;
@@ -281,6 +302,8 @@ public final class Mode2Engine {
                 UncertaintySource src = new UncertaintySource(
                         label, u.getId(), handles.createHandle(element), dim.getAttributeName(), min, max, nominal);
                 sources.add(src);
+                check.symbolic = true;
+                annotatedSource.add(src);
                 Mode2Result.Source rs = new Mode2Result.Source();
                 rs.variable = label;
                 rs.uncertainty = u.getId();
@@ -367,6 +390,8 @@ public final class Mode2Engine {
             p.branches.addAll(PathUtils.getCurPC().branchConstraints);
             long tt = System.nanoTime();
             p.affected.addAll(affected(resources));
+            checkAnnotations(p, session);
+            p.structure = structure(resources);
             phase("path.tagScan", tt);
             p.overflows = OverflowMonitor.count();
             p.overflow = OverflowMonitor.first();
@@ -422,6 +447,153 @@ public final class Mode2Engine {
         return list;
     }
 
+    // ---------------------------------------------------------------- annotations and structure
+
+    /** Records, for every annotated attribute, what its value carries after this path's propagation. */
+    private void checkAnnotations(PathRun p, VsumViewSession session) {
+        for (int i = 0; i < annotated.size(); i++) {
+            Mode2Result.AnnotationCheck c = annotated.get(i);
+            UncertaintySource own = annotatedSource.get(i);
+            if (own != null && p.input.get(own.label) == own.nominal) {
+                continue; // not realized on this path (left at its nominal value, untagged)
+            }
+            EObject element;
+            try {
+                element = session.resolve(c.element);
+            } catch (RuntimeException e) {
+                continue; // no handle or element deleted: shows up in the structural comparison
+            }
+            EStructuralFeature f = element == null ? null : element.eClass().getEStructuralFeature(c.attribute);
+            if (f == null) {
+                continue;
+            }
+            Expression e = expressionOf(element.eGet(f));
+            java.util.Set<String> vars = Exprs.variables(e);
+            String status;
+            if (e == null) {
+                status = own != null ? "resolved" : "untouched";
+            } else if (own != null && vars.equals(java.util.Set.of(own.label))) {
+                status = e instanceof IntVariable ? "independent" : "rewritten";
+            } else {
+                status = "derived";
+            }
+            p.annotationStates.put(i, new String[] {status, e == null ? null : Exprs.brief(e, 8), String.join(",", vars)});
+            if ("rewritten".equals(status)) {
+                p.annotationExprs.put(i, e);
+            }
+        }
+    }
+
+    private void summarizeAnnotations(List<PathRun> paths) throws Exception {
+        List<String> order = List.of("derived", "resolved", "rewritten", "independent", "untouched");
+        for (int i = 0; i < annotated.size(); i++) {
+            Mode2Result.AnnotationCheck c = annotated.get(i);
+            for (PathRun p : paths) {
+                String[] st = p.annotationStates.get(i);
+                if (st == null) {
+                    continue;
+                }
+                c.paths.merge(st[0], 1, Integer::sum);
+                if (st.length > 2 && !st[2].isEmpty()) {
+                    c.dependsOn.addAll(List.of(st[2].split(",")));
+                }
+                if (c.expression == null && st[1] != null && ("derived".equals(st[0]) || "rewritten".equals(st[0]))) {
+                    c.expression = st[1];
+                }
+            }
+            c.status = order.stream().filter(c.paths::containsKey).findFirst().orElse("untouched");
+            if ("rewritten".equals(c.status)) {
+                // Cheap check (one query per path): is the rewritten value the variable itself
+                // on the path's part of the domain? Then the rules wrote it back unchanged.
+                UncertaintySource own = annotatedSource.get(i);
+                boolean identity = true;
+                for (PathRun p : paths) {
+                    Expression e = p.annotationExprs.get(i);
+                    if (e != null) {
+                        identity &= !sat(and(and(domain(), pc(p)),
+                                new BinaryOperation(Operator.NE, e, var(own))));
+                    }
+                }
+                c.identityOnDomain = identity;
+            }
+            result.annotationChecks.add(c);
+        }
+    }
+
+    private static Expression expressionOf(Object v) {
+        if (v instanceof Integer) {
+            return Symbolicator.getExpression(((Integer) v).intValue());
+        } else if (v instanceof Float) {
+            return Symbolicator.getExpression(((Float) v).floatValue());
+        } else if (v instanceof Double) {
+            return Symbolicator.getExpression(((Double) v).doubleValue());
+        } else if (v instanceof Long) {
+            return Symbolicator.getExpression(((Long) v).longValue());
+        }
+        return null;
+    }
+
+    /** Multiset of the elements of the models, keyed by "EClass handle" (uncertainty model excluded). */
+    private Map<String, Integer> structure(Collection<Resource> resources) {
+        Map<String, Integer> m = new java.util.TreeMap<>();
+        for (Resource r : resources) {
+            for (TreeIterator<EObject> it = r.getAllContents(); it.hasNext(); ) {
+                EObject o = it.next();
+                if (o.eClass().getEPackage() == uncertainty.UncertaintyPackage.eINSTANCE) {
+                    continue;
+                }
+                String h = safeHandle(o);
+                String key = h.equals(o.eClass().getName()) ? h : o.eClass().getName() + " " + h;
+                m.merge(key, 1, Integer::sum);
+            }
+        }
+        return m;
+    }
+
+    private void diffStructure(Mode2Result.Region r, Map<String, Integer> path) {
+        if (nominalStructure.isEmpty()) {
+            return;
+        }
+        Set<String> keys = new java.util.TreeSet<>(path.keySet());
+        keys.addAll(nominalStructure.keySet());
+        for (String k : keys) {
+            int d = path.getOrDefault(k, 0) - nominalStructure.getOrDefault(k, 0);
+            for (int j = 0; j < Math.abs(d); j++) {
+                (d > 0 ? r.elementsAdded : r.elementsRemoved).add(k);
+            }
+        }
+    }
+
+    /** Elements whose count differs between the paths' committed models (UCM10 step 2). */
+    private void varyingStructure(List<PathRun> paths) {
+        Set<String> keys = new java.util.TreeSet<>();
+        for (PathRun p : paths) {
+            keys.addAll(p.structure.keySet());
+        }
+        for (String k : keys) {
+            Set<Integer> counts = new HashSet<>();
+            for (PathRun p : paths) {
+                counts.add(p.structure.getOrDefault(k, 0));
+            }
+            if (counts.size() > 1) {
+                result.elementsVaryingBetweenRegions.add(k);
+            }
+        }
+        int n = result.nominal.region;
+        if (n >= 0 && n < paths.size()) {
+            Mode2Result.Region r = result.regions.get(n);
+            result.nominal.structureDiffers = !r.elementsAdded.isEmpty() || !r.elementsRemoved.isEmpty();
+        }
+    }
+
+    private double domainSize() {
+        double n = 1;
+        for (UncertaintySource s : sources) {
+            n *= s.max - s.min + 1;
+        }
+        return n;
+    }
+
     // ---------------------------------------------------------------- regions and solver
 
     private Mode2Result.Region region(PathRun p) throws Exception {
@@ -460,6 +632,13 @@ public final class Mode2Engine {
         boolean pcInBox = box == null || !sat(and(pc, not(box)));
         boolean boxInPc = box == null || !sat(and(and(domain(), box), not(pc)));
         r.extentType = pcInBox && boxInPc ? "box" : "predicate";
+        if ("box".equals(r.extentType)) {
+            double points = 1;
+            for (int[] iv : r.intervals.values()) {
+                points *= iv[1] - iv[0] + 1;
+            }
+            r.probability = points / domainSize();
+        }
         if (p.overflows > 0) {
             r.approximate = true;
             r.approximateReason = p.overflows + " overflow(s) on symbolic values, first: " + p.overflow;
@@ -493,6 +672,7 @@ public final class Mode2Engine {
             for (OclPipeline inv : invariants) {
                 verdicts.put(inv.name, inv.evaluate(wrapper, stage("nominal." + inv.name)));
             }
+            nominalStructure = structure(resources);
         }
         Mode2Result.Nominal n = result.nominal;
         n.values.putAll(nominal);
@@ -509,7 +689,10 @@ public final class Mode2Engine {
             if (n.region >= 0) {
                 Mode2Result.Region from = result.regions.get(n.region);
                 from.excludesNominal = true;
-                from.extentType = "predicate";
+                from.extentType = "predicate"; // a box minus one point
+                if (from.probability != null) {
+                    from.probability -= 1 / domainSize();
+                }
             }
             Mode2Result.Region point = new Mode2Result.Region();
             point.extentType = "box";
@@ -520,6 +703,7 @@ public final class Mode2Engine {
             point.verdicts.putAll(verdicts);
             point.consistent = n.consistent;
             point.pathCondition.add("nominal state (unchanged model)");
+            point.probability = 1 / domainSize();
             result.regions.add(point);
             n.region = result.regions.size() - 1;
         }

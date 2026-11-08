@@ -75,6 +75,12 @@ class Mode1BaselineTest {
         VitruvTestViewDefinition def = new VitruvTestViewDefinition(vsumState, Scenarios.cps(), Scenarios.ROOT_TYPES);
         List<Path> ecores = List.of(ECORE_DIR.resolve("cad.ecore"), ECORE_DIR.resolve("brakesystem.ecore"));
 
+        List<String> names = new ArrayList<>();
+        java.util.regex.Matcher inv = java.util.regex.Pattern.compile("(?m)^\\s*inv\\s+(\\w+)\\s*:")
+                .matcher(Files.readString(Scenarios.oclFile()));
+        while (inv.find()) {
+            names.add(inv.group(1));
+        }
         long t0 = System.nanoTime();
         List<Map<String, Object>> out = new ArrayList<>();
         for (int i = 0; i < states.size(); i++) {
@@ -91,9 +97,16 @@ class Mode1BaselineTest {
                     }
                 }
             }
+            // The CLI evaluator names every constraint "unknown"; its results come in the order of
+            // the invariants in the OCL file (checked 2026-11-08 against its violation messages).
             Map<String, Boolean> constraints = new LinkedHashMap<>();
-            for (OclConstraintResult c : r.getConstraints()) {
-                constraints.put(c.getName(), c.isSatisfied());
+            List<OclConstraintResult> cs = r.getConstraints();
+            for (int k = 0; k < cs.size(); k++) {
+                String name = cs.get(k).getName();
+                if ((name == null || "unknown".equals(name)) && cs.size() == names.size()) {
+                    name = names.get(k);
+                }
+                constraints.put(name, cs.get(k).isSatisfied());
             }
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("values", values);

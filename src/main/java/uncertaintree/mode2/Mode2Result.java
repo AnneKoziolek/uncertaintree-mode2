@@ -17,6 +17,21 @@ public final class Mode2Result {
     public List<String> unsupported = new ArrayList<>();
     public List<Region> regions = new ArrayList<>();
     public Nominal nominal = new Nominal();
+    /**
+     * How Region#probability is computed. The uncertainty metamodel has no distribution for an
+     * integer range, so every integer point of a source's domain is taken as equally likely and the
+     * sources as independent (the same weighting as counting Mode 1's states).
+     */
+    public String probabilityModel = "uniform over each source's integer domain, sources independent";
+    /**
+     * Elements ("EClass handle") whose number differs between the regions' committed models:
+     * candidates for existence annotations (architecture doc, UCM10 step 2). Empty when all
+     * regions have the same elements, even if they differ from the nominal state (see
+     * Region#elementsAdded).
+     */
+    public List<String> elementsVaryingBetweenRegions = new ArrayList<>();
+    /** Per annotated attribute (symbolic or not): what the rules did with it on the explored paths. */
+    public List<AnnotationCheck> annotationChecks = new ArrayList<>();
     public Stats stats = new Stats();
 
     /**
@@ -32,6 +47,12 @@ public final class Mode2Result {
         public boolean fixpointConfirmed;
         /** Index into regions of the region that contains the nominal point (after a split: the point region). */
         public int region = -1;
+        /**
+         * True if the committed models of the region containing the nominal point have other
+         * elements than the unchanged nominal model: propagation of the first change creates or
+         * deletes elements, so the nominal state is not a structural fixpoint of the CPRs.
+         */
+        public boolean structureDiffers;
     }
 
     public static final class Source {
@@ -62,6 +83,50 @@ public final class Mode2Result {
         public String approximateReason;
         /** Set when the nominal point was split off this region (fixpoint check failed). */
         public boolean excludesNominal;
+        /**
+         * Probability mass of the region under probabilityModel: its integer points over all
+         * points of the domain. Exact for "box" regions (also after the nominal point was split
+         * off); null for "predicate" regions, whose points are not counted.
+         */
+        public Double probability;
+        /**
+         * Elements of the committed models that exist on this region's path and not in the
+         * nominal state, and the other way round, as "EClass handle" (multiset difference;
+         * elements without an id attribute are keyed by EClass only). Empty when the rules create
+         * and delete the same elements everywhere; then the regions differ only in attribute values.
+         */
+        public List<String> elementsAdded = new ArrayList<>();
+        public List<String> elementsRemoved = new ArrayList<>();
+    }
+
+    /**
+     * What happened to one annotated attribute after propagation, on the paths where its source
+     * was realized at a non-nominal value (symbolic sources) or on all paths (others).
+     * status: "independent" (still carries exactly its own variable), "rewritten" (an expression
+     * over its own variable only, e.g. a round trip through another model; see identityOnDomain), "derived" (an expression over other sources' variables: the
+     * rules compute it from other roots, so it is a dependent annotation, concepts 16),
+     * "resolved" (concrete after propagation: a rule or the incoming change overwrote it),
+     * "untouched" (a non-symbolic annotation that no source reaches).
+     */
+    public static final class AnnotationCheck {
+        public String uncertainty;
+        public String element;
+        public String attribute;
+        /** True if Mode 2 treats this annotation as a symbolic source. */
+        public boolean symbolic;
+        public String status;
+        /** Variables its value depends on after propagation (union over paths). */
+        public java.util.Set<String> dependsOn = new java.util.TreeSet<>();
+        /** One expression seen (depth-limited), for "rewritten" and "derived". */
+        public String expression;
+        /**
+         * For "rewritten": true if the solver proves the expression equal to the variable on the
+         * explored paths' parts of the domain (the rules write the value back unchanged), false if
+         * not, null if not checked.
+         */
+        public Boolean identityOnDomain;
+        /** Number of paths per observed status. */
+        public Map<String, Integer> paths = new LinkedHashMap<>();
     }
 
     public static final class Affected {

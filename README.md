@@ -9,18 +9,19 @@ Mode 2 of UncertainTree: symbolic execution of consistency preservation with CoC
 | Path | Role |
 |---|---|
 | `src/main/java/uncertaintree/mode2/Mode2Engine.java` | Mode 2 on Mode 1's inputs (VSUM folder, CPRs, root types, OCL file); sources from the uncertainty annotations |
-| `Mode2Result.java` | JSON result: regions with verdicts and extents, affected attributes, nominal/fixpoint check, statistics |
+| `Mode2Result.java` | JSON result: regions with verdicts, extents, probability (uniform prior, box regions) and elements added or removed against the nominal model; affected attributes; dependency check per annotated attribute (independent, rewritten, derived, resolved, untouched); elements varying between regions; nominal/fixpoint check; statistics |
 | `Mode2SolverServer.java`, `Mode2Solver.java` | Z3 in a separate plain JVM; one connection and one incremental Z3 Solver per analysis (`Mode2Solver.endAnalysis`), `TCP_NODELAY`; the worker keeps one solver process for its lifetime; diagnosis properties `mode2.dumpQueries` (every request, for offline replay) and `mode2.dumpSlowQueries` (SMT-LIB); `mode2.bounds` = `search` (default) or `optimize` for region bounds |
 | `OclPipeline.java` | MultiModelOCL's stages (parse, symbol table, type check, evaluation) with the parse tree cached per invariant text; timing per stage in `phaseMillis` |
 | `Mode2Worker.java` | Warm worker over HTTP (`POST /analyze`, `GET /health`); start with `scripts/run-worker.sh`, optionally with a warm-up request that also fills the parse cache; for the demo, `scripts/start-demo-worker.sh [A|B] [port]` prepares a scenario, writes `target/demo-request-<scenario>.json` and starts the worker warmed up with it |
 | `InMemoryMetamodelWrapper.java` | MultiModelOCL on live, tagged models |
 | `UncertaintySource.java`, `Exprs.java` | an annotated attribute as a symbolic source; helpers for Green expressions |
-| `src/test/.../Mode1BaselineTest.java` | UncertainTree's real Mode 1 (plain JVM), baseline per state |
-| `src/test/.../Mode2EngineITCase.java` | Mode 2 on scenarios A, B and A with an incoming change (`ventilated := false`), compared with the baseline |
+| `src/test/.../Mode1BaselineTest.java` | UncertainTree's real Mode 1 (plain JVM), baseline per state; constraint names by position in the OCL file (the CLI evaluator reports `unknown`) |
+| `src/test/.../Mode2EngineITCase.java` | Mode 2 on scenarios A, B and A with an incoming change (`ventilated := false`), compared with the baseline per state and constraint, probabilities against Mode 1's state shares; scenario D (dependent radius annotation) and an incoming change that resolves the diameter |
+| `src/test/.../G3Mode1Test.java`, `G3Mode2ITCase.java` | G3 width series, only with `-Dmode2.g3=W-A-50-50,...` (see `Scenarios#widen`); summary in `target/g3-summary.json` |
 | `src/test/.../Mode2WorkerITCase.java` | the worker over HTTP: scenario A cold, then three warm requests; timings per phase |
 | `src/test/.../Cps1SymbolicDiameterITCase.java`, `Cps1ObservedOclITCase.java` | probes: the symbolic diameter reaches the CAD radius through the real CPRs; MultiModelOCL's verdict becomes a constraint |
 | `src/test/.../Scenarios.java`, `PrepareDemoRequest.java`, `SmtEncodingBenchTest.java` | scenario inputs; a scenario folder and worker request for the demo script; benchmark of the bit-vector and integer encodings on recorded queries |
-| `src/test/resources/cps1`, `scenarioB` | CPS1 model state (copied from UncertainTreeDev) and scenario B's annotations |
+| `src/test/resources/cps1`, `scenarioB`, `scenarioD` | CPS1 model state (copied from UncertainTreeDev); the annotations of scenarios B (plus centering diameter) and D (plus cylinder radius) |
 
 ## Build and run
 

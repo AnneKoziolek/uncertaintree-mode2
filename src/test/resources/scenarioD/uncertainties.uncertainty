@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Scenario D (Mode 2 dependency check, 2026-11-08): CPS1's diameter annotation plus an
+     independent annotation on the CAD cylinder radius, which brakesystem2cad computes from the
+     diameter (r = d/2). Expected: the radius annotation is reported as "derived" from d. -->
+<uncertainty:UncertaintyAnnotationRepository xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uncertainty="http://vitruv.tools/uncertainty/model">
+  <uncertainties id="BrakeDiscDiameterUncertainty">
+    <uncertaintyLocation parameterLocation="diameterInMM">
+      <referencedComponents href="brakesystem.brakesystem#//@BrakeComponents.0"/>
+    </uncertaintyLocation>
+    <effect representation="Discrete">
+      <uncertaintydomain xsi:type="uncertainty:ParameterizedDiscreteRange" min="5" max="7"/>
+    </effect>
+    <pattern patternType="Random"/>
+    <perspective perspective="Objective"/>
+    <source source="RESOURCES"/>
+  </uncertainties>
+  <uncertainties id="BrakeDiscCylinderRadiusUncertainty">
+    <uncertaintyLocation parameterLocation="radius">
+      <referencedComponents href="brake_disc_and_caliper.cad#//@namespaces.0/@shapes.0"/>
+    </uncertaintyLocation>
+    <effect>
+      <uncertaintydomain xsi:type="uncertainty:ParameterizedContinuousRange" min="1.0" max="1.0" stepSize="0.5"/>
+    </effect>
+    <pattern patternType="Random"/>
+    <perspective perspective="Objective"/>
+    <source source="RESOURCES"/>
+  </uncertainties>
+</uncertainty:UncertaintyAnnotationRepository>

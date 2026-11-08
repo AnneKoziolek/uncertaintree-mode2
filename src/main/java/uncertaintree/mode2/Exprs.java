@@ -2,6 +2,7 @@ package uncertaintree.mode2;
 
 import za.ac.sun.cs.green.expr.Expression;
 import za.ac.sun.cs.green.expr.Operation;
+import za.ac.sun.cs.green.expr.Variable;
 
 /** Depth-limited printing of Green expressions (their recursive toString overflows on deep trees). */
 public final class Exprs {
@@ -42,5 +43,26 @@ public final class Exprs {
             sb.append(brief(o.getOperand(i), maxDepth - 1));
         }
         return sb.append(')').toString();
+    }
+
+    /** Names of the variables in e (iterative: deep trees overflow a recursive visitor). */
+    public static java.util.Set<String> variables(Expression e) {
+        java.util.Set<String> names = new java.util.TreeSet<>();
+        java.util.ArrayDeque<Expression> stack = new java.util.ArrayDeque<>();
+        if (e != null) {
+            stack.push(e);
+        }
+        while (!stack.isEmpty()) {
+            Expression x = stack.pop();
+            if (x instanceof Variable) {
+                names.add(((Variable) x).getName());
+            } else if (x instanceof Operation) {
+                Operation o = (Operation) x;
+                for (int i = 0; i < o.getArity(); i++) {
+                    stack.push(o.getOperand(i));
+                }
+            }
+        }
+        return names;
     }
 }

@@ -59,9 +59,9 @@ final class Scenarios {
         EnsureTestDirectoryStructureUtils.ensureDirectoryExistsAndClear(vsumState);
         EnsureTestDirectoryStructureUtils.copyOriginalStateToVsumRoot(original, vsumState);
         String base = scenario.startsWith("W-") ? scenario.split("-")[1] : scenario;
-        if ("B".equals(base)) {
-            Files.copy(Path.of("src/test/resources/scenarioB/uncertainties.uncertainty"),
-                    vsumState.resolve("uncertainties.uncertainty"), StandardCopyOption.REPLACE_EXISTING);
+        Path annotations = Path.of("src/test/resources/scenario" + base + "/uncertainties.uncertainty");
+        if (!"A".equals(base) && Files.exists(annotations)) { // B, D: own annotations on CPS1's models
+            Files.copy(annotations, vsumState.resolve("uncertainties.uncertainty"), StandardCopyOption.REPLACE_EXISTING);
         }
         if (scenario.startsWith("W-")) {
             widen(vsumState.resolve("uncertainties.uncertainty"), scenario);
