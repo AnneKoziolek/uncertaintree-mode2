@@ -77,6 +77,39 @@ public final class Mode2Engine {
         public Path oclFile;
         public int solverPort = 9411;
         public int maxPaths = 40;
+        /**
+         * Changes that come in on the uncertain model (e.g. from a demonstrator). Applied after
+         * the realization of the uncertain values and propagated in the same commit, so every
+         * CPR they trigger reads the tagged values (see docs/mode2-concepts.md, entry 5).
+         */
+        public List<AttributeChange> incomingChanges = new ArrayList<>();
+    }
+
+    /** An attribute assignment on an element, identified like Mode 1 does (IdAttributeHandleStrategy). */
+    public static final class AttributeChange {
+        public String element;
+        public String attribute;
+        /** Value in EMF's literal form for the attribute type (EcoreUtil.createFromString). */
+        public String value;
+
+        public AttributeChange() {}
+
+        public AttributeChange(String element, String attribute, String value) {
+            this.element = element;
+            this.attribute = attribute;
+            this.value = value;
+        }
+    }
+
+    private static void apply(VsumViewSession session, List<AttributeChange> changes) {
+        for (AttributeChange c : changes) {
+            EObject o = session.resolve(c.element);
+            EStructuralFeature f = o.eClass().getEStructuralFeature(c.attribute);
+            if (!(f instanceof EAttribute)) {
+                throw new IllegalArgumentException("not an attribute: " + c.element + "." + c.attribute);
+            }
+            o.eSet(f, org.eclipse.emf.ecore.util.EcoreUtil.createFromString(((EAttribute) f).getEAttributeType(), c.value));
+        }
     }
 
     private static final class PathRun {
@@ -294,6 +327,7 @@ public final class Mode2Engine {
                 EStructuralFeature f = element.eClass().getEStructuralFeature(src.attribute);
                 element.eSet(f, Symbolicator.symbolicInRange(src.label, v, src.min, src.max));
             }
+            apply(session, config.incomingChanges);
             session.commit();
             phase("path.setAndCommit", tc);
             EObject committed = any == null ? null : session.resolve(sources.get(0).handle);
@@ -413,6 +447,11 @@ public final class Mode2Engine {
         VitruvTestViewDefinition def = new VitruvTestViewDefinition(config.vsumState, config.cps, config.rootTypes);
         try (VsumViewSession session =
                 new CopyingVitruvViewProvider(util, new IdBasedVsumObjectResolver()).checkoutIsolated(def)) {
+            if (!config.incomingChanges.isEmpty()) {
+                // nominal realization plus the incoming change
+                apply(session, config.incomingChanges);
+                session.commit();
+            }
             Collection<Resource> resources = sources.isEmpty()
                     ? List.of()
                     : session.resolve(sources.get(0).handle).eResource().getResourceSet().getResources();

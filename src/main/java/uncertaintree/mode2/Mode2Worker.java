@@ -49,6 +49,8 @@ public final class Mode2Worker {
         public List<String> packages = new ArrayList<>();
         public int solverPort = 9420;
         public int maxPaths = 40;
+        /** Changes coming in on the uncertain model, applied after the realization (optional). */
+        public List<Mode2Engine.AttributeChange> incomingChanges = new ArrayList<>();
     }
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -105,6 +107,7 @@ public final class Mode2Worker {
         }
         c.solverPort = req.solverPort;
         c.maxPaths = req.maxPaths;
+        c.incomingChanges = req.incomingChanges;
         Mode2Result r = new Mode2Engine(c).analyze();
         analyses++;
         return r;

@@ -34,6 +34,45 @@ public class Mode2EngineITCase {
         run("B");
     }
 
+    /**
+     * Steps 2/4 of the demo plan: a change comes in on the uncertain model (ventilated := false).
+     * It is propagated after the realization of d in the same commit, so the CPRs and the
+     * evaluator see the tagged d. Expected from the constraints: ventilated holds everywhere
+     * (the implication's conclusion is now true); the caliper check still splits at 330.
+     */
+    @Test
+    void scenarioAWithIncomingChange() throws Exception {
+        Mode2Engine.Config c = new Mode2Engine.Config();
+        c.scenario = "A+ventilated=false";
+        c.vsumState = Scenarios.prepare("A", "incoming");
+        c.cps = Scenarios.cps();
+        c.rootTypes = Scenarios.ROOT_TYPES;
+        c.oclFile = Scenarios.oclFile();
+        c.solverPort = Integer.getInteger("mode2.solverPort", 9411) + 5;
+        c.incomingChanges.add(new Mode2Engine.AttributeChange(
+                "http://vitruv.tools/brakesystem/model::BrakeDisk::id3_front_brake_disc", "ventilated", "false"));
+        Mode2Result r = new Mode2Engine(c).analyze();
+        JSON.writeValue(Path.of("target", "mode2-result-A-incoming.json").toFile(), r);
+        for (Mode2Result.Region g : r.regions) {
+            System.out.println("[mode2-result] incoming: " + g.extentType + " " + g.intervals.values().stream()
+                    .map(iv -> "[" + iv[0] + ", " + iv[1] + "]").toList() + " " + g.verdicts);
+        }
+        System.out.println("[mode2-result] incoming: nominal " + r.nominal.verdicts + ", fixpoint confirmed "
+                + r.nominal.fixpointConfirmed + ", executions " + r.stats.concreteExecutions);
+        for (int d = 325; d <= 337; d++) {
+            final int dd = d;
+            List<Mode2Result.Region> covering = r.regions.stream().filter(g -> {
+                int[] iv = g.intervals.values().iterator().next();
+                return iv[0] <= dd && dd <= iv[1];
+            }).toList();
+            Assertions.assertEquals(1, covering.size(), "one region per point, d=" + d);
+            Mode2Result.Region g = covering.get(0);
+            Assertions.assertTrue(g.verdicts.get("ventilated"), "ventilated holds after the change, d=" + d);
+            Assertions.assertEquals(d <= 329, g.consistent, "caliper boundary unchanged, d=" + d);
+        }
+        Assertions.assertTrue(r.nominal.fixpointConfirmed);
+    }
+
     @SuppressWarnings("unchecked")
     static void run(String scenario) throws Exception {
         Mode2Engine.Config c = new Mode2Engine.Config();
