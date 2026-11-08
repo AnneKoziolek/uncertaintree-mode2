@@ -32,8 +32,17 @@ public final class Mode2Solver implements AutoCloseable {
 
     private final Process process;
     private final int port;
+    /** One connection for all queries of an analysis (a socket per query cost about 175 ms). */
+    private Socket conn;
+    private int dumped;
+    private ObjectOutputStream out;
+    private ObjectInputStream in;
     public int queries;
     public long nanos;
+    /** Part of {@link #nanos} spent serializing requests in this (instrumented) JVM. */
+    public long writeNanos;
+    /** Part of {@link #nanos} spent deserializing the reply's model map in this JVM. */
+    public long replyNanos;
 
     public Mode2Solver(int port) throws Exception {
         this.port = port;
@@ -72,19 +81,48 @@ public final class Mode2Solver implements AutoCloseable {
         drain.start();
     }
 
-    @SuppressWarnings("unchecked")
+    /** Least and greatest value of {@code var} under {@code e}: status SATISFIABLE with model keys "min" and "max". */
+    public Result bounds(Expression e, String var) throws Exception {
+        return send(new Object[] {"BOUNDS", e, var});
+    }
+
     public Result check(Expression e) throws Exception {
+        return send(e);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Result send(Object e) throws Exception {
         long t = System.nanoTime();
         // As in Knarr's Symbolicator: Galette's SerializationMasks append tag wrappers
         // to the stream, which a plain JVM cannot read; disable them for the round trip.
         boolean prev = setSerializationPropagation(false);
-        try (Socket s = new Socket("127.0.0.1", port);
-                ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
+        try {
+            if (conn == null) {
+                conn = new Socket("127.0.0.1", port);
+                conn.setTcpNoDelay(true);
+                out = new ObjectOutputStream(new java.io.BufferedOutputStream(conn.getOutputStream()));
+                out.flush(); // stream header first: the server's ObjectInputStream waits for it
+                in = new ObjectInputStream(new java.io.BufferedInputStream(conn.getInputStream()));
+            }
+            String dumpQueries = System.getProperty("mode2.dumpQueries");
+            if (dumpQueries != null && !dumpQueries.isBlank()) {
+                // Diagnosis: every request as a serialized object, for offline replay.
+                java.nio.file.Path dir = java.nio.file.Path.of(dumpQueries);
+                java.nio.file.Files.createDirectories(dir);
+                try (ObjectOutputStream f = new ObjectOutputStream(java.nio.file.Files.newOutputStream(
+                        dir.resolve(String.format("q%05d.ser", dumped++))))) {
+                    f.writeObject(e);
+                }
+            }
+            long w = System.nanoTime();
             out.writeObject(e);
             out.flush();
-            ObjectInputStream in = new ObjectInputStream(s.getInputStream());
+            out.reset(); // no back references across queries (the table would only grow)
+            writeNanos += System.nanoTime() - w;
             String status = (String) in.readObject();
+            long r = System.nanoTime();
             Map<String, String> model = (Map<String, String>) in.readObject();
+            replyNanos += System.nanoTime() - r;
             return new Result(status, model);
         } finally {
             setSerializationPropagation(prev);
@@ -118,12 +156,21 @@ public final class Mode2Solver implements AutoCloseable {
 
     private void shutdown() throws Exception {
         boolean prev = setSerializationPropagation(false);
-        try (Socket s = new Socket("127.0.0.1", port);
-                ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
+        try {
+            if (conn == null) {
+                conn = new Socket("127.0.0.1", port);
+                out = new ObjectOutputStream(conn.getOutputStream());
+            }
             out.writeObject("SHUTDOWN");
             out.flush();
         } catch (Exception ignored) {
         } finally {
+            try {
+                if (conn != null) {
+                    conn.close();
+                }
+            } catch (Exception ignored) {
+            }
             setSerializationPropagation(prev);
         }
         process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);

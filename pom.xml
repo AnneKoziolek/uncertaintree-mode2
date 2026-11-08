@@ -40,6 +40,10 @@
              switched off (galette-bell TagPropagator branch modes). Empty = everything. -->
         <!-- Diagnosis: directory for SMT-LIB dumps of slow solver queries; empty = off -->
         <mode2.dumpSlowQueries></mode2.dumpSlowQueries>
+        <!-- Diagnosis: directory for every solver request as a serialized object (offline replay); empty = off -->
+        <mode2.dumpQueries></mode2.dumpQueries>
+        <!-- Region bounds: "search" (binary search with plain checks; faster on a warm solver for narrow domains, measured 2026-11-08) or "optimize" (Z3 Optimize, two calls; for wide domains) -->
+        <mode2.bounds>search</mode2.bounds>
         <branch.prefixes>mir/,tools/vitruv/multimodelocl/</branch.prefixes>
         <checkstyle.skip>true</checkstyle.skip>
         <spotless.check.skip>true</spotless.check.skip>
@@ -202,6 +206,8 @@
                         <!-- plain (uninstrumented) JDK for the solver process -->
                         <mode2.plainJava>${java.home}</mode2.plainJava>
                         <mode2.dumpSlowQueries>${mode2.dumpSlowQueries}</mode2.dumpSlowQueries>
+                        <mode2.dumpQueries>${mode2.dumpQueries}</mode2.dumpQueries>
+                        <mode2.bounds>${mode2.bounds}</mode2.bounds>
                     </systemPropertyVariables>
                     <redirectTestOutputToFile>true</redirectTestOutputToFile>
                 </configuration>

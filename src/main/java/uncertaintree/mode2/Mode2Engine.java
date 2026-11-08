@@ -26,7 +26,6 @@ import tools.vitruv.change.propagation.ChangePropagationSpecification;
 import tools.vitruv.framework.views.View;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.multimodelocl.evaluator.Value;
-import tools.vitruv.multimodelocl.pipeline.OCLCompiler;
 import uncertainty.Uncertainty;
 import uncertainty.UncertaintyAnnotationRepository;
 import uncertaintree.stateextraction.PossibleValue;
@@ -76,6 +75,8 @@ public final class Mode2Engine {
         public List<Class<?>> rootTypes;
         public Path oclFile;
         public int solverPort = 9411;
+        /** Solver process shared across analyses (the worker's); null = start one for this analysis. */
+        public Mode2Solver solver;
         public int maxPaths = 40;
         /**
          * Changes that come in on the uncertain model (e.g. from a demonstrator). Applied after
@@ -131,7 +132,7 @@ public final class Mode2Engine {
     private final IdAttributeHandleStrategy handles = new IdAttributeHandleStrategy();
     private final List<UncertaintySource> sources = new ArrayList<>();
     private final Mode2Result result = new Mode2Result();
-    private List<String> invariants;
+    private List<OclPipeline> invariants;
     private Map<String, EPackage> packages;
     private Mode2Solver solver;
 
@@ -145,6 +146,11 @@ public final class Mode2Engine {
         result.stats.phaseMillis.merge(name, (System.nanoTime() - startNanos) / 1_000_000, Long::sum);
     }
 
+    /** Timing sink for the OCL stages of one invariant (phase "ocl.<invariant>.<stage>"). */
+    private java.util.function.ObjLongConsumer<String> stage(String invariant) {
+        return (stage, nanos) -> result.stats.phaseMillis.merge("ocl." + invariant + "." + stage, nanos / 1_000_000, Long::sum);
+    }
+
     public List<UncertaintySource> sources() {
         return sources;
     }
@@ -154,7 +160,10 @@ public final class Mode2Engine {
         result.scenario = config.scenario;
         long ts = System.nanoTime();
         discoverSources();
-        invariants = invariants(config.oclFile);
+        invariants = new ArrayList<>();
+        for (String inv : invariants(config.oclFile)) {
+            invariants.add(new OclPipeline(inv));
+        }
         phase("discoverSources", ts);
         ts = System.nanoTime();
 
@@ -163,7 +172,15 @@ public final class Mode2Engine {
         Set<String> issuedFlips = new HashSet<>();
         Deque<Map<String, Integer>> work = new ArrayDeque<>();
         work.add(initialInput());
-        try (Mode2Solver s = new Mode2Solver(config.solverPort)) {
+        // A solver process started per analysis runs Green's translation and Z3's Java API
+        // cold (about 130 ms per query); the worker passes one process for its lifetime.
+        Mode2Solver own = config.solver == null ? new Mode2Solver(config.solverPort) : null;
+        Mode2Solver s = own != null ? own : config.solver;
+        int queries0 = s.queries;
+        long nanos0 = s.nanos;
+        long write0 = s.writeNanos;
+        long reply0 = s.replyNanos;
+        try {
             phase("solverStart", ts);
             solver = s;
             while (paths.size() < config.maxPaths) {
@@ -210,10 +227,15 @@ public final class Mode2Engine {
             nominalCheck(paths);
             phase("nominalCheck", tn);
             result.stats.concreteExecutions = paths.size();
-            result.stats.solverQueries = solver.queries;
-            result.stats.solverMillis = solver.nanos / 1_000_000;
+            result.stats.solverQueries = solver.queries - queries0;
+            result.stats.solverMillis = (solver.nanos - nanos0) / 1_000_000;
+            result.stats.phaseMillis.put("solver.write", (solver.writeNanos - write0) / 1_000_000);
+            result.stats.phaseMillis.put("solver.readReply", (solver.replyNanos - reply0) / 1_000_000);
         } finally {
             solver = null;
+            if (own != null) {
+                own.close();
+            }
         }
         result.stats.totalMillis = (System.nanoTime() - t0) / 1_000_000;
         phase("analyze.total", t0);
@@ -335,14 +357,10 @@ public final class Mode2Engine {
                     ? List.of()
                     : committed.eResource().getResourceSet().getResources();
             InMemoryMetamodelWrapper wrapper = new InMemoryMetamodelWrapper(packages, resources);
-            for (String inv : invariants) {
-                int at = inv.indexOf("inv ") + 4;
-                String name = inv.substring(at, inv.indexOf(':', at)).trim();
+            for (OclPipeline inv : invariants) {
                 long to = System.nanoTime();
-                OCLCompiler compiler = new OCLCompiler(wrapper, null);
-                Value v = compiler.compile(inv);
-                p.verdicts.put(name, !compiler.hasErrors() && verdict(v));
-                phase("path.ocl." + name, to);
+                p.verdicts.put(inv.name, inv.evaluate(wrapper, stage(inv.name)));
+                phase("path.ocl." + inv.name, to);
             }
             SymbolicListener.setListener(null);
             p.branches.addAll(fixed);
@@ -418,8 +436,24 @@ public final class Mode2Engine {
         Expression pc = and(domain(), pc(p));
         Expression box = null;
         for (UncertaintySource s : sources) {
-            int lo = bound(pc, s, true);
-            int hi = bound(pc, s, false);
+            int lo;
+            int hi;
+            // Default: binary search. On a warm solver it beat Z3 Optimize for scenario A
+            // (1.3 s vs 2.5 s for all queries; Optimize is slow on the nonlinear path conditions);
+            // Optimize needs two calls whatever the width, so it wins for wide domains.
+            boolean search = !"optimize".equals(System.getProperty("mode2.bounds"));
+            Mode2Solver.Result b = search ? null : solver.bounds(pc, s.label);
+            if (b != null && b.sat()) {
+                lo = Integer.parseInt(b.model.get("min"));
+                hi = Integer.parseInt(b.model.get("max"));
+            } else {
+                // optimizer failed (an ERROR status): binary search with plain checks
+                if (b != null) {
+                    System.out.println("[mode2] optimizer bounds failed (" + b.status + "), binary search for " + s.label);
+                }
+                lo = bound(pc, s, true);
+                hi = bound(pc, s, false);
+            }
             r.intervals.put(s.label, new int[] {lo, hi});
             box = and(box, and(ge(s, lo), le(s, hi)));
         }
@@ -456,12 +490,8 @@ public final class Mode2Engine {
                     ? List.of()
                     : session.resolve(sources.get(0).handle).eResource().getResourceSet().getResources();
             InMemoryMetamodelWrapper wrapper = new InMemoryMetamodelWrapper(packages, resources);
-            for (String inv : invariants) {
-                int at = inv.indexOf("inv ") + 4;
-                String name = inv.substring(at, inv.indexOf(':', at)).trim();
-                OCLCompiler compiler = new OCLCompiler(wrapper, null);
-                Value v = compiler.compile(inv);
-                verdicts.put(name, !compiler.hasErrors() && verdict(v));
+            for (OclPipeline inv : invariants) {
+                verdicts.put(inv.name, inv.evaluate(wrapper, stage("nominal." + inv.name)));
             }
         }
         Mode2Result.Nominal n = result.nominal;

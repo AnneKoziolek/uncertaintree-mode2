@@ -70,6 +70,7 @@ public final class Mode2Worker {
 
     public void stop() {
         server.stop(0);
+        stopSolver();
     }
 
     public int port() {
@@ -90,6 +91,21 @@ public final class Mode2Worker {
         }
     }
 
+    /** Solver process for the worker's lifetime (warm JIT for translation and Z3's Java API). */
+    private Mode2Solver solver;
+    private int solverPort;
+
+    /** Stops the solver process (also from a shutdown hook: a child process outlives the JVM). */
+    public synchronized void stopSolver() {
+        if (solver != null) {
+            try {
+                solver.close();
+            } catch (Exception ignored) {
+            }
+            solver = null;
+        }
+    }
+
     /** Runs one analysis for a request (also used for the warm-up). */
     public synchronized Mode2Result run(Request req) throws Exception {
         register(req.packages);
@@ -106,6 +122,14 @@ public final class Mode2Worker {
             c.rootTypes.add(Class.forName(name));
         }
         c.solverPort = req.solverPort;
+        if (solver == null || solverPort != req.solverPort) {
+            if (solver != null) {
+                solver.close();
+            }
+            solver = new Mode2Solver(req.solverPort);
+            solverPort = req.solverPort;
+        }
+        c.solver = solver;
         c.maxPaths = req.maxPaths;
         c.incomingChanges = req.incomingChanges;
         Mode2Result r = new Mode2Engine(c).analyze();
@@ -134,6 +158,7 @@ public final class Mode2Worker {
 
     public static void main(String[] args) throws Exception {
         Mode2Worker w = new Mode2Worker(Integer.parseInt(args[0]));
+        Runtime.getRuntime().addShutdownHook(new Thread(w::stopSolver));
         if (args.length > 1) {
             long t = System.nanoTime();
             Request warm = JSON.readValue(Files.readString(Path.of(args[1])), Request.class);

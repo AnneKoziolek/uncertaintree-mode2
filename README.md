@@ -10,7 +10,9 @@ Mode 2 of UncertainTree: symbolic execution of consistency preservation with CoC
 |---|---|
 | `src/main/java/uncertaintree/mode2/Mode2Engine.java` | Mode 2 on Mode 1's inputs (VSUM folder, CPRs, root types, OCL file); sources from the uncertainty annotations |
 | `Mode2Result.java` | JSON result: regions with verdicts and extents, affected attributes, nominal/fixpoint check, statistics |
-| `Mode2SolverServer.java`, `Mode2Solver.java` | Z3 in a separate plain JVM, socket protocol |
+| `Mode2SolverServer.java`, `Mode2Solver.java` | Z3 in a separate plain JVM; one socket per analysis, `TCP_NODELAY`; the worker keeps one solver process for its lifetime; diagnosis properties `mode2.dumpQueries` (every request, for offline replay) and `mode2.dumpSlowQueries` (SMT-LIB); `mode2.bounds` = `search` (default) or `optimize` for region bounds |
+| `OclPipeline.java` | MultiModelOCL's stages (parse, symbol table, type check, evaluation) with the parse tree cached per invariant text; timing per stage in `phaseMillis` |
+| `Mode2Worker.java` | Warm worker over HTTP (`POST /analyze`, `GET /health`); start with `scripts/run-worker.sh`, optionally with a warm-up request that also fills the parse cache |
 | `InMemoryMetamodelWrapper.java` | MultiModelOCL on live, tagged models |
 | `src/test/.../Mode1BaselineTest.java` | UncertainTree's real Mode 1 (plain JVM), baseline per state |
 | `src/test/.../Mode2EngineITCase.java` | Mode 2 on scenarios A and B, compared with the baseline |
