@@ -2,7 +2,7 @@
 
 Mode 2 of UncertainTree: symbolic execution of consistency preservation with CoCoPath-style concolic exploration on Jon Bell's Galette/Knarr (`knarr-integration`), applied to UncertainTree's brake example.
 
-**Conceptual insights** (what is tainted and why, representative versus nominal value, fixpoint check, filters, library semantics, extents) are recorded in the stack repository's [`docs/mode2-concepts.md`](https://gitlab.kit.edu/anne.koziolek/uncertaintree-stack/-/blob/main/docs/mode2-concepts.md). Sessions working here add new insights there; paper-writing sessions start from it. Steps and measurements: `docs/mode2-log.md` in the same repository.
+**Conceptual insights** (what is tainted and why, representative versus nominal value, fixpoint check, filters, library semantics, extents) are recorded in the stack repository's [`docs/mode2-concepts.md`](https://gitlab.kit.edu/anne.koziolek/uncertaintree-stack/-/blob/main/docs/mode2-concepts.md) (KIT GitLab, access on request). Overview and links to all commits: issue #1. Sessions working here add new insights there; paper-writing sessions start from it. Steps and measurements: `docs/mode2-log.md` in the same repository.
 
 ## Contents
 
@@ -14,8 +14,12 @@ Mode 2 of UncertainTree: symbolic execution of consistency preservation with CoC
 | `OclPipeline.java` | MultiModelOCL's stages (parse, symbol table, type check, evaluation) with the parse tree cached per invariant text; timing per stage in `phaseMillis` |
 | `Mode2Worker.java` | Warm worker over HTTP (`POST /analyze`, `GET /health`); start with `scripts/run-worker.sh`, optionally with a warm-up request that also fills the parse cache |
 | `InMemoryMetamodelWrapper.java` | MultiModelOCL on live, tagged models |
+| `UncertaintySource.java`, `Exprs.java` | an annotated attribute as a symbolic source; helpers for Green expressions |
 | `src/test/.../Mode1BaselineTest.java` | UncertainTree's real Mode 1 (plain JVM), baseline per state |
-| `src/test/.../Mode2EngineITCase.java` | Mode 2 on scenarios A and B, compared with the baseline |
+| `src/test/.../Mode2EngineITCase.java` | Mode 2 on scenarios A, B and A with an incoming change (`ventilated := false`), compared with the baseline |
+| `src/test/.../Mode2WorkerITCase.java` | the worker over HTTP: scenario A cold, then warm; timings per phase |
+| `src/test/.../Cps1SymbolicDiameterITCase.java`, `Cps1ObservedOclITCase.java` | probes: the symbolic diameter reaches the CAD radius through the real CPRs; MultiModelOCL's verdict becomes a constraint |
+| `src/test/.../Scenarios.java`, `SmtEncodingBenchTest.java` | scenario inputs; benchmark of the bit-vector and integer encodings on recorded queries |
 | `src/test/resources/cps1`, `scenarioB` | CPS1 model state (copied from UncertainTreeDev) and scenario B's annotations |
 
 ## Build and run
