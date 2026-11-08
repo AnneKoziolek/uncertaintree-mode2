@@ -10,17 +10,17 @@ import java.util.Map;
 import za.ac.sun.cs.green.expr.Expression;
 
 /** Client side of {@link Mode2SolverServer}; also starts and stops the server process. */
-final class Mode2Solver implements AutoCloseable {
-    static final class Result {
-        final String status;
-        final Map<String, String> model;
+public final class Mode2Solver implements AutoCloseable {
+    public static final class Result {
+        public final String status;
+        public final Map<String, String> model;
 
         Result(String status, Map<String, String> model) {
             this.status = status;
             this.model = model;
         }
 
-        boolean sat() {
+        public boolean sat() {
             return "SATISFIABLE".equals(status);
         }
 
@@ -32,10 +32,10 @@ final class Mode2Solver implements AutoCloseable {
 
     private final Process process;
     private final int port;
-    int queries;
-    long nanos;
+    public int queries;
+    public long nanos;
 
-    Mode2Solver(int port) throws Exception {
+    public Mode2Solver(int port) throws Exception {
         this.port = port;
         String plainJava = System.getProperty("mode2.plainJava") + File.separator + "bin" + File.separator + "java";
         ProcessBuilder pb = new ProcessBuilder(plainJava, "-cp", System.getProperty("java.class.path"),
@@ -67,7 +67,7 @@ final class Mode2Solver implements AutoCloseable {
     }
 
     @SuppressWarnings("unchecked")
-    Result check(Expression e) throws Exception {
+    public Result check(Expression e) throws Exception {
         long t = System.nanoTime();
         // As in Knarr's Symbolicator: Galette's SerializationMasks append tag wrappers
         // to the stream, which a plain JVM cannot read; disable them for the round trip.

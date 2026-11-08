@@ -31,6 +31,14 @@ public final class Mode2SolverServer {
 
     public static void main(String[] args) throws Exception {
         int port = Integer.parseInt(args[0]);
+        // One Z3 context for the lifetime of the process (a new context per query cost
+        // 0.5-0.7 s each); a fresh Solver per query keeps queries independent.
+        Context ctx = new Context();
+        // One incremental solver; each query is push / add / check / pop. A new Solver per
+        // query on the shared context made queries slower over time (native objects pile up).
+        Solver solver = ctx.mkSolver();
+        long queries = 0;
+        long nanos = 0;
         try (ServerSocket ss = new ServerSocket(port)) {
             System.out.println("MODE2-SOLVER READY " + port);
             System.out.flush();
@@ -45,10 +53,11 @@ public final class Mode2SolverServer {
                     }
                     String status;
                     HashMap<String, String> model = null;
-                    try (Context ctx = new Context()) {
+                    try {
                         Z3JavaTranslator t = new Z3JavaTranslator(ctx);
                         ((Expression) req).accept(t);
-                        Solver solver = ctx.mkSolver();
+                        long q0 = System.nanoTime();
+                        solver.push();
                         solver.add((BoolExpr) t.getTranslation());
                         Status st = solver.check();
                         status = st.toString();
@@ -58,6 +67,11 @@ public final class Mode2SolverServer {
                             for (Map.Entry<Variable, Expr> v : t.getVariableMap().entrySet()) {
                                 model.put(v.getKey().toString(), decimal(m.eval(v.getValue(), true)));
                             }
+                        }
+                        solver.pop();
+                        nanos += System.nanoTime() - q0;
+                        if (++queries % 25 == 0) {
+                            System.out.printf("server: %d queries, %.1f ms per query in Z3%n", queries, nanos / 1e6 / queries);
                         }
                     } catch (Throwable e) {
                         status = "ERROR " + e;

@@ -4,10 +4,10 @@ import za.ac.sun.cs.green.expr.Expression;
 import za.ac.sun.cs.green.expr.Operation;
 
 /** Depth-limited printing of Green expressions (their recursive toString overflows on deep trees). */
-final class Exprs {
+public final class Exprs {
     private Exprs() {}
 
-    static int depth(Expression e) {
+    public static int depth(Expression e) {
         int best = 0;
         java.util.ArrayDeque<Object[]> stack = new java.util.ArrayDeque<>();
         stack.push(new Object[] {e, 1});
@@ -26,7 +26,7 @@ final class Exprs {
         return best;
     }
 
-    static String brief(Expression e, int maxDepth) {
+    public static String brief(Expression e, int maxDepth) {
         if (!(e instanceof Operation)) {
             return String.valueOf(e);
         }
