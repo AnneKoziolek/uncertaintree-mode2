@@ -55,6 +55,7 @@ public class Mode2WorkerITCase {
                 Mode2Result r = JSON.readValue(resp.body(), Mode2Result.class);
                 System.out.printf("[mode2-worker] %s request: %.1f s, %d regions, %d executions, solver %d ms%n", round, s,
                         r.regions.size(), r.stats.concreteExecutions, r.stats.solverMillis);
+                System.out.println("[mode2-worker]   phases ms: " + r.stats.phaseMillis + ", solver " + r.stats.solverMillis);
                 Assertions.assertEquals(3, r.regions.size());
                 Assertions.assertTrue(r.regions.stream().anyMatch(g -> g.consistent
                         && g.intervals.values().iterator().next()[0] == 325

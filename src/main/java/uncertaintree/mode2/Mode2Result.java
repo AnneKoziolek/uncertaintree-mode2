@@ -78,5 +78,7 @@ public final class Mode2Result {
         public long solverMillis;
         public long totalMillis;
         public List<Long> pathMillis = new ArrayList<>();
+        /** Accumulated time per phase (source discovery, solver start, checkout, commit, OCL per invariant, tag scan, nominal check). */
+        public Map<String, Long> phaseMillis = new LinkedHashMap<>();
     }
 }

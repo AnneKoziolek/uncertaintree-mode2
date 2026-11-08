@@ -51,8 +51,10 @@ public final class Mode2SolverServer {
                         ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {
                     Object req = in.readObject();
                     if ("SHUTDOWN".equals(req)) {
-                        out.writeObject("BYE");
-                        return;
+                        // Exit at once: the client does not read a reply (writing one failed with a
+                        // broken pipe, so exit was never reached), and Z3's native threads would
+                        // keep the JVM alive. Measured before: 10 s shutdown timeout per analysis.
+                        System.exit(0);
                     }
                     String status;
                     HashMap<String, String> model = null;

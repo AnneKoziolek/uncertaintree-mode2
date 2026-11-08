@@ -108,6 +108,15 @@ public final class Mode2Solver implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        long t = System.nanoTime();
+        try {
+            shutdown();
+        } finally {
+            System.out.printf("[mode2-solver] close took %d ms%n", (System.nanoTime() - t) / 1_000_000);
+        }
+    }
+
+    private void shutdown() throws Exception {
         boolean prev = setSerializationPropagation(false);
         try (Socket s = new Socket("127.0.0.1", port);
                 ObjectOutputStream out = new ObjectOutputStream(s.getOutputStream())) {

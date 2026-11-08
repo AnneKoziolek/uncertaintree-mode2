@@ -26,6 +26,8 @@ public final class InMemoryMetamodelWrapper implements MetamodelWrapperInterface
     private final Map<String, EPackage> packages = new LinkedHashMap<>();
     private final List<EObject> roots = new ArrayList<>();
     private final List<EObject> all = new ArrayList<>();
+    /** allInstances per EClass; the wrapper sees one fixed model state, so the cache is exact. */
+    private final Map<EClass, List<EObject>> instancesCache = new java.util.HashMap<>();
 
     /** @param packages metamodel name as used in OCL (e.g. {@code cad}) to generated EPackage */
     public InMemoryMetamodelWrapper(Map<String, EPackage> packages, Collection<Resource> resources) {
@@ -64,12 +66,17 @@ public final class InMemoryMetamodelWrapper implements MetamodelWrapperInterface
 
     @Override
     public List<EObject> getAllInstances(EClass eClass) {
+        List<EObject> cached = instancesCache.get(eClass);
+        if (cached != null) {
+            return cached;
+        }
         List<EObject> result = new ArrayList<>();
         for (EObject o : all) {
             if (eClass.isSuperTypeOf(o.eClass())) {
                 result.add(o);
             }
         }
+        instancesCache.put(eClass, result);
         return result;
     }
 

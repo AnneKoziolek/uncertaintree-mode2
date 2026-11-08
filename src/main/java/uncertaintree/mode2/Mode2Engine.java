@@ -106,6 +106,12 @@ public final class Mode2Engine {
         this.config = config;
     }
 
+    private long phaseStart;
+
+    private void phase(String name, long startNanos) {
+        result.stats.phaseMillis.merge(name, (System.nanoTime() - startNanos) / 1_000_000, Long::sum);
+    }
+
     public List<UncertaintySource> sources() {
         return sources;
     }
@@ -113,8 +119,11 @@ public final class Mode2Engine {
     public Mode2Result analyze() throws Exception {
         long t0 = System.nanoTime();
         result.scenario = config.scenario;
+        long ts = System.nanoTime();
         discoverSources();
         invariants = invariants(config.oclFile);
+        phase("discoverSources", ts);
+        ts = System.nanoTime();
 
         List<PathRun> paths = new ArrayList<>();
         Map<Map<String, Integer>, Expression> expected = new LinkedHashMap<>();
@@ -122,6 +131,7 @@ public final class Mode2Engine {
         Deque<Map<String, Integer>> work = new ArrayDeque<>();
         work.add(initialInput());
         try (Mode2Solver s = new Mode2Solver(config.solverPort)) {
+            phase("solverStart", ts);
             solver = s;
             while (paths.size() < config.maxPaths) {
                 if (work.isEmpty()) {
@@ -157,11 +167,15 @@ public final class Mode2Engine {
                     }
                 }
             }
+            long tr = System.nanoTime();
             for (PathRun p : paths) {
                 result.regions.add(region(p));
                 result.stats.pathMillis.add(p.millis);
             }
+            phase("regions", tr);
+            long tn = System.nanoTime();
             nominalCheck(paths);
+            phase("nominalCheck", tn);
             result.stats.concreteExecutions = paths.size();
             result.stats.solverQueries = solver.queries;
             result.stats.solverMillis = solver.nanos / 1_000_000;
@@ -169,6 +183,7 @@ public final class Mode2Engine {
             solver = null;
         }
         result.stats.totalMillis = (System.nanoTime() - t0) / 1_000_000;
+        phase("analyze.total", t0);
         return result;
     }
 
@@ -259,8 +274,11 @@ public final class Mode2Engine {
         PathRun p = new PathRun(input);
         long t0 = System.nanoTime();
         VitruvTestViewDefinition def = new VitruvTestViewDefinition(config.vsumState, config.cps, config.rootTypes);
+        long tc = System.nanoTime();
         try (VsumViewSession session =
                 new CopyingVitruvViewProvider(util, new IdBasedVsumObjectResolver()).checkoutIsolated(def)) {
+            phase("path.checkout", tc);
+            tc = System.nanoTime();
             SymbolicListener.setListener(new PathConstraintListener());
             List<Expression> fixed = new ArrayList<>();
             EObject any = null;
@@ -277,6 +295,7 @@ public final class Mode2Engine {
                 element.eSet(f, Symbolicator.symbolicInRange(src.label, v, src.min, src.max));
             }
             session.commit();
+            phase("path.setAndCommit", tc);
             EObject committed = any == null ? null : session.resolve(sources.get(0).handle);
             Collection<Resource> resources = committed == null
                     ? List.of()
@@ -285,14 +304,18 @@ public final class Mode2Engine {
             for (String inv : invariants) {
                 int at = inv.indexOf("inv ") + 4;
                 String name = inv.substring(at, inv.indexOf(':', at)).trim();
+                long to = System.nanoTime();
                 OCLCompiler compiler = new OCLCompiler(wrapper, null);
                 Value v = compiler.compile(inv);
                 p.verdicts.put(name, !compiler.hasErrors() && verdict(v));
+                phase("path.ocl." + name, to);
             }
             SymbolicListener.setListener(null);
             p.branches.addAll(fixed);
             p.branches.addAll(PathUtils.getCurPC().branchConstraints);
+            long tt = System.nanoTime();
             p.affected.addAll(affected(resources));
+            phase("path.tagScan", tt);
             p.overflows = OverflowMonitor.count();
             p.overflow = OverflowMonitor.first();
         } finally {
@@ -300,6 +323,7 @@ public final class Mode2Engine {
             Symbolicator.reset();
         }
         p.millis = (System.nanoTime() - t0) / 1_000_000;
+        phase("path.total", t0);
         return p;
     }
 
