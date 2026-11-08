@@ -74,7 +74,7 @@ public class Mode2EngineITCase {
     }
 
     @SuppressWarnings("unchecked")
-    static void run(String scenario) throws Exception {
+    static Mode2Result run(String scenario) throws Exception {
         Mode2Engine.Config c = new Mode2Engine.Config();
         c.scenario = scenario;
         c.vsumState = Scenarios.prepare(scenario, "mode2");
@@ -143,5 +143,6 @@ public class Mode2EngineITCase {
         }
         System.out.println("[mode2-result] agreement with Mode 1: " + compared + " states (Mode 1 took "
                 + baseline.get("millis") + " ms), " + constraintChecks + " per-constraint checks");
+        return r;
     }
 }

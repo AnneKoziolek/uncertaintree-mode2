@@ -58,14 +58,50 @@ final class Scenarios {
         Path meta = vsumState.resolve("vsum");
         EnsureTestDirectoryStructureUtils.ensureDirectoryExistsAndClear(vsumState);
         EnsureTestDirectoryStructureUtils.copyOriginalStateToVsumRoot(original, vsumState);
-        if ("B".equals(scenario)) {
+        String base = scenario.startsWith("W-") ? scenario.split("-")[1] : scenario;
+        if ("B".equals(base)) {
             Files.copy(Path.of("src/test/resources/scenarioB/uncertainties.uncertainty"),
                     vsumState.resolve("uncertainties.uncertainty"), StandardCopyOption.REPLACE_EXISTING);
+        }
+        if (scenario.startsWith("W-")) {
+            widen(vsumState.resolve("uncertainties.uncertainty"), scenario);
         }
         VitruviusModelsMapUtils.createModelsModelsFile(vsumState);
         UuidUtils.writeUuidFileFromModelDirectory(vsumState, meta.resolve("uuid.uuid"));
         CopyCorrespondencesUtils.copyAndAdjustCorrespondenceFile(original, meta);
         return vsumState;
+    }
+
+    /**
+     * G3 width scenarios: {@code W-<A|B>-<min>-<max>[-<min2>-<max2>]} takes the annotations of
+     * A or B and sets the offsets below and above the nominal value of the first (and second)
+     * ParameterizedDiscreteRange, e.g. W-A-50-50 = diameter 280..380 (101 states).
+     */
+    static void widen(Path annotations, String scenario) throws java.io.IOException {
+        String[] p = scenario.split("-");
+        String xml = Files.readString(annotations);
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(xsi:type=\"uncertainty:ParameterizedDiscreteRange\" min=\")\\d+(\" max=\")\\d+(\")")
+                .matcher(xml);
+        StringBuilder out = new StringBuilder();
+        int i = 0;
+        while (m.find()) {
+            if (2 + 2 * i + 1 < p.length) {
+                m.appendReplacement(out, "$1" + p[2 + 2 * i] + "$2" + p[3 + 2 * i] + "$3");
+            }
+            i++;
+        }
+        m.appendTail(out);
+        if (i * 2 + 2 < p.length) {
+            throw new IllegalArgumentException(scenario + ": more widths than annotations (" + i + ")");
+        }
+        Files.writeString(annotations, out.toString());
+    }
+
+    /** Scenario ids for G3 from -Dmode2.g3 (comma-separated), empty when not set. */
+    static List<String> g3Scenarios() {
+        String v = System.getProperty("mode2.g3", "");
+        return v.isBlank() ? List.of() : List.of(v.trim().split("\\s*,\\s*"));
     }
 
     static Path baselineFile(String scenario) {
