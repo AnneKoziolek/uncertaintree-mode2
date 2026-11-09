@@ -7,7 +7,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Prepares the nominal VSUM folder of a CPS1 scenario ("A" or "B") under target/ and writes a
+ * Prepares the nominal VSUM folder of a scenario ("A", "B" on CPS1, "C" on CPS3) under target/ and writes a
  * worker request for it, so that {@code scripts/start-demo-worker.sh} can start the worker with a
  * warm-up and a request file ready to POST. Runs in a plain JVM (no instrumentation needed).
  *
@@ -25,7 +25,7 @@ public final class PrepareDemoRequest {
         Mode2Worker.Request req = new Mode2Worker.Request();
         req.scenario = scenario + "-demo";
         req.vsumState = Scenarios.prepare(scenario, "demo").toString();
-        req.oclFile = Scenarios.oclFile().toString();
+        req.oclFile = Scenarios.oclFile(scenario).toString();
         req.cps = List.of("mir.reactions.cad2brakesystem.Cad2brakesystemChangePropagationSpecification",
                 "mir.reactions.brakesystem2cad.Brakesystem2cadChangePropagationSpecification");
         req.rootTypes = List.of("brakesystem.Brakesystem", "cad.CAD_Model", "uncertainty.UncertaintyAnnotationRepository");

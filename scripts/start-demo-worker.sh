@@ -2,7 +2,7 @@
 # One command for the demo: prepares a CPS1 scenario, starts the warm Mode-2 worker and
 # warms it up with that scenario (about 60 s), so the first real request is warm (about 6 s).
 #
-# Usage: scripts/start-demo-worker.sh [scenario A|B] [port]
+# Usage: scripts/start-demo-worker.sh [scenario A|B|C] [port]   (C: caliper position x disc diameter, CPS3)
 # Afterwards, from another shell:
 #   curl -s http://127.0.0.1:<port>/health
 #   curl -s -H 'Content-Type: application/json' --data @target/demo-request-<scenario>.json \
