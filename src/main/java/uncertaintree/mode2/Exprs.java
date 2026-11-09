@@ -65,4 +65,81 @@ public final class Exprs {
         }
         return names;
     }
+
+    private static final Expression TRUE = new za.ac.sun.cs.green.expr.BinaryOperation(
+            Operation.Operator.EQ, new za.ac.sun.cs.green.expr.IntConstant(0), new za.ac.sun.cs.green.expr.IntConstant(0));
+
+    /**
+     * Topological closure of a path condition for bound computation: negations pushed into the
+     * comparisons, strict comparisons made non-strict, disequalities dropped. Z3 4.8.14's Optimize
+     * reports wrong suprema under strict real inequalities (maximize x s.t. 165 + x < 164 gave -2,
+     * found 2026-11-09), but is correct on the closure; the caller verifies the result and decides
+     * open or closed ends on the original condition.
+     */
+    public static Expression closure(Expression e) {
+        return closure(e, false);
+    }
+
+    private static Expression closure(Expression e, boolean negated) {
+        if (!(e instanceof Operation)) {
+            return e;
+        }
+        Operation o = (Operation) e;
+        Operation.Operator op = o.getOperator();
+        switch (op) {
+            case NOT:
+                return closure(o.getOperand(0), !negated);
+            case AND:
+            case OR: {
+                boolean and = (op == Operation.Operator.AND) != negated; // De Morgan under negation
+                return new za.ac.sun.cs.green.expr.BinaryOperation(and ? Operation.Operator.AND : Operation.Operator.OR,
+                        closure(o.getOperand(0), negated), closure(o.getOperand(1), negated));
+            }
+            case EQ: case NE: case LT: case LE: case GT: case GE: {
+                Operation.Operator r = negated ? negate(op) : op;
+                switch (r) {
+                    case LT: r = Operation.Operator.LE; break;
+                    case GT: r = Operation.Operator.GE; break;
+                    case NE: return TRUE;
+                    default: break;
+                }
+                return new za.ac.sun.cs.green.expr.BinaryOperation(r, o.getOperand(0), o.getOperand(1));
+            }
+            default:
+                return negated ? new za.ac.sun.cs.green.expr.UnaryOperation(Operation.Operator.NOT, e) : e;
+        }
+    }
+
+    private static Operation.Operator negate(Operation.Operator op) {
+        switch (op) {
+            case EQ: return Operation.Operator.NE;
+            case NE: return Operation.Operator.EQ;
+            case LT: return Operation.Operator.GE;
+            case LE: return Operation.Operator.GT;
+            case GT: return Operation.Operator.LE;
+            case GE: return Operation.Operator.LT;
+            default: throw new IllegalArgumentException(op.toString());
+        }
+    }
+
+    /** True if e contains a product or division of two terms that both contain variables. */
+    public static boolean nonlinear(Expression e) {
+        java.util.ArrayDeque<Expression> stack = new java.util.ArrayDeque<>();
+        stack.push(e);
+        while (!stack.isEmpty()) {
+            Expression x = stack.pop();
+            if (x instanceof Operation) {
+                Operation o = (Operation) x;
+                Operation.Operator op = o.getOperator();
+                if ((op == Operation.Operator.MUL || op == Operation.Operator.DIV) && o.getArity() == 2
+                        && !variables(o.getOperand(0)).isEmpty() && !variables(o.getOperand(1)).isEmpty()) {
+                    return true;
+                }
+                for (int i = 0; i < o.getArity(); i++) {
+                    stack.push(o.getOperand(i));
+                }
+            }
+        }
+        return false;
+    }
 }

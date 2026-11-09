@@ -46,6 +46,8 @@
         <mode2.bounds>search</mode2.bounds>
         <!-- G3 width scenarios (comma-separated, e.g. W-A-50-50,W-B-10-10-5-5); empty = G3 tests skipped -->
         <mode2.g3></mode2.g3>
+        <!-- Diagnosis: Knarr prints a stack trace for every float/double-to-integer truncation of an expression containing this text; empty = off -->
+        <knarr.traceConvert></knarr.traceConvert>
         <branch.prefixes>mir/,tools/vitruv/multimodelocl/</branch.prefixes>
         <checkstyle.skip>true</checkstyle.skip>
         <spotless.check.skip>true</spotless.check.skip>
@@ -211,6 +213,7 @@
                         <mode2.dumpQueries>${mode2.dumpQueries}</mode2.dumpQueries>
                         <mode2.bounds>${mode2.bounds}</mode2.bounds>
                         <mode2.g3>${mode2.g3}</mode2.g3>
+                        <knarr.traceConvert>${knarr.traceConvert}</knarr.traceConvert>
                     </systemPropertyVariables>
                     <redirectTestOutputToFile>true</redirectTestOutputToFile>
                 </configuration>

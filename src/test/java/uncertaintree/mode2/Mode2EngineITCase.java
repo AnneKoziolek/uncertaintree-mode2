@@ -74,7 +74,7 @@ public class Mode2EngineITCase {
     }
 
     /**
-     * Dependency check (concepts 16): scenario D also annotates the CAD cylinder radius, which
+     * Dependency check (concepts 14): scenario D also annotates the CAD cylinder radius, which
      * brakesystem2cad computes from the diameter. The radius (EFloat, not symbolic) must be
      * reported as derived from the diameter's variable, the diameter as independent; the regions
      * are those of scenario A, since the radius annotation is kept nominal and overwritten.
@@ -97,7 +97,9 @@ public class Mode2EngineITCase {
                     + " " + a.dependsOn + " " + a.paths + (a.expression == null ? "" : " " + a.expression));
             byAttr.put(a.attribute, a);
         }
-        Assertions.assertEquals(1, r.sources.size(), "only the diameter is symbolic");
+        // Since real-valued sources (2026-11-09) the radius annotation is a real source as well;
+        // the CPR overwrites it with d/2, so it is reported as derived and does not split regions.
+        Assertions.assertEquals(2, r.sources.size(), "diameter (int) and radius (real)");
         Assertions.assertEquals("rewritten", byAttr.get("diameterInMM").status, "round trip through the CAD parameter");
         Assertions.assertEquals(Boolean.TRUE, byAttr.get("diameterInMM").identityOnDomain);
         Assertions.assertEquals("derived", byAttr.get("radius").status);
@@ -136,6 +138,123 @@ public class Mode2EngineITCase {
         Assertions.assertFalse(r.regions.get(0).consistent, "d = 333 violates the caliper check");
     }
 
+    /**
+     * Scenario C (UncertainTreeDev's CPS3): disc diameter and centering diameter (int) and one
+     * annotation that shifts the x coordinate of the four caliper bridge-block points together
+     * (real, ±5.0). Constraint: every bridge coordinate x >= diameter / 2. Expected: the exact
+     * boundary shift >= d/2 - 165 per diameter value, closed on the consistent side; every one of
+     * Mode 1's 1008 grid points in exactly one region with Mode 1's verdict; probabilities under the
+     * uniform prior summing to 1, the consistent one 34/80.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void scenarioC() throws Exception {
+        Mode2Engine.Config c = new Mode2Engine.Config();
+        c.scenario = "C";
+        c.vsumState = Scenarios.prepare("C", "mode2");
+        c.cps = Scenarios.cps();
+        c.rootTypes = Scenarios.ROOT_TYPES;
+        c.oclFile = Scenarios.oclFile("C");
+        c.solverPort = Integer.getInteger("mode2.solverPort", 9411) + 9;
+        Mode2Engine engine = new Mode2Engine(c);
+        Mode2Result r = engine.analyze();
+        JSON.writeValue(Path.of("target", "mode2-result-C.json").toFile(), r);
+        r.sources.forEach(s -> System.out.println("[mode2-result] C source " + s.variable + " " + s.type
+                + (s.offset ? " shift of " + s.members : "") + " [" + (s.minReal != null ? s.minReal : s.min) + ", "
+                + (s.maxReal != null ? s.maxReal : s.max) + "]"));
+        for (Mode2Result.Region g : r.regions) {
+            System.out.println("[mode2-result] C region " + g.extentType + " " + g.verdicts + " p=" + g.probability
+                    + " ints " + g.intervals.entrySet().stream().map(e -> e.getKey() + "=" + java.util.Arrays.toString(e.getValue())).toList());
+            for (Mode2Result.Slice sl : g.slices) {
+                Mode2Result.RealInterval iv = sl.real.values().iterator().next();
+                System.out.println("[mode2-result] C   slice " + sl.at + ": " + (iv.loOpen ? "(" : "[") + iv.lo + ", " + iv.hi
+                        + (iv.hiOpen ? ")" : "]"));
+            }
+        }
+        r.annotationChecks.forEach(a -> System.out.println("[mode2-result] C annotation " + a.element + " " + a.attribute
+                + ": " + a.status + " " + a.paths + (a.identityOnDomain == null ? "" : ", identity " + a.identityOnDomain)));
+        System.out.printf("[mode2-result] C executions %d, divergences %d, solver %d queries in %d ms, total %d ms%n",
+                r.stats.concreteExecutions, r.stats.divergences, r.stats.solverQueries, r.stats.solverMillis, r.stats.totalMillis);
+
+        UncertaintySource shift = engine.sources().stream().filter(s -> s.real).findFirst().orElseThrow();
+        UncertaintySource d = engine.sources().stream().filter(s -> "diameterInMM".equals(s.attribute)).findFirst().orElseThrow();
+        Assertions.assertTrue(shift.offset, "the grouped annotation is one shift variable");
+        Assertions.assertEquals(4, shift.members.size());
+        Assertions.assertEquals(-5.0, shift.minReal, 1e-9);
+        Assertions.assertEquals(5.0, shift.maxReal, 1e-9);
+
+        // Exact boundary per diameter value, from the slices of the consistent region.
+        Mode2Result.Region ok = r.regions.stream().filter(g -> g.consistent).findFirst().orElseThrow();
+        Assertions.assertEquals(8, ok.slices.size(), "one slice per diameter value 328..335 " + ok.slices.size());
+        for (Mode2Result.Slice sl : ok.slices) {
+            int dv = sl.at.get(d.label);
+            Mode2Result.RealInterval iv = sl.real.get(shift.label);
+            Assertions.assertEquals(dv / 2.0 - 165, iv.lo, 1e-9, "boundary at d=" + dv);
+            Assertions.assertFalse(iv.loOpen, "x >= r: the boundary belongs to the consistent region");
+            Assertions.assertEquals(5.0, iv.hi, 1e-9);
+        }
+
+        // Every Mode-1 grid point in exactly one region (decided from the reported extent).
+        Map<String, Object> baseline = JSON.readValue(Scenarios.baselineFile("C").toFile(), Map.class);
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) baseline.get("rows");
+        Assertions.assertEquals(1008, rows.size());
+        int checks = 0;
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> values = (Map<String, Object>) row.get("values");
+            Map<String, Number> point = new java.util.LinkedHashMap<>();
+            for (UncertaintySource s : engine.sources()) {
+                Double v = s.valueIn(values);
+                point.put(s.label, v == null ? s.nominalValue() : s.real ? (Number) v : (Number) (int) Math.round(v));
+            }
+            List<Mode2Result.Region> covering = r.regions.stream().filter(g -> Boolean.TRUE.equals(g.contains(point))).toList();
+            Assertions.assertEquals(1, covering.size(), "exactly one region for " + point);
+            Mode2Result.Region g = covering.get(0);
+            Assertions.assertEquals(row.get("consistent"), g.consistent, "global verdict at " + point);
+            Map<String, Boolean> m1 = (Map<String, Boolean>) row.get("constraints");
+            for (Map.Entry<String, Boolean> e : m1.entrySet()) {
+                Assertions.assertEquals(e.getValue(), g.verdicts.get(e.getKey()), e.getKey() + " at " + point);
+                checks++;
+            }
+        }
+        System.out.println("[mode2-result] C agreement with Mode 1: " + rows.size() + " grid points (Mode 1 took "
+                + baseline.get("millis") + " ms), " + checks + " per-constraint checks");
+
+        double sum = r.regions.stream().mapToDouble(g -> g.probability == null ? Double.NaN : g.probability).sum();
+        Assertions.assertEquals(1.0, sum, 1e-9, "probabilities sum to 1");
+        Assertions.assertEquals(34.0 / 80, ok.probability, 1e-9, "consistent share under the uniform prior");
+        Assertions.assertTrue(r.nominal.fixpointConfirmed, "nominal (330, 166, shift 0) lies on the boundary, consistent");
+        for (Mode2Result.AnnotationCheck a : r.annotationChecks) {
+            Assertions.assertTrue("independent".equals(a.status)
+                    || "rewritten".equals(a.status) && Boolean.TRUE.equals(a.identityOnDomain), a.element + ": " + a.status);
+        }
+    }
+
+    /** Diagnosis (2026-11-09): scenario C with a non-integral first shift; run with -Dit.test=...#probeNonIntegralShift. */
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "mode2.probe", matches = "true")
+    void probeNonIntegralShift() throws Exception {
+        Mode2Engine.Config c = new Mode2Engine.Config();
+        c.scenario = "C-probe";
+        c.vsumState = Scenarios.prepare("C", "probe");
+        c.cps = Scenarios.cps();
+        c.rootTypes = Scenarios.ROOT_TYPES;
+        c.oclFile = Scenarios.oclFile("C");
+        c.solverPort = Integer.getInteger("mode2.solverPort", 9411) + 10;
+        c.maxPaths = 1;
+        c.firstInput = new java.util.LinkedHashMap<>();
+        c.firstInput.put("BrakeDiscDiameterDiameterUncertainty_diameterInMM", 329);
+        c.firstInput.put("BrakeDiscCenteringDiameterDiameterUncertainty_centeringDiameterInMM", 165);
+        c.firstInput.put("BrakeCaliperBridgeElementPositionUncertainty_shift", -0.25);
+        Mode2Result r = new Mode2Engine(c).analyze();
+        JSON.writeValue(Path.of("target", "mode2-result-C-probe.json").toFile(), r);
+        for (Mode2Result.Region g : r.regions) {
+            System.out.println("[mode2-probe] region " + g.verdicts + " repr " + g.representative);
+            g.pathCondition.forEach(pcs -> System.out.println("[mode2-probe]   " + pcs));
+        }
+        r.annotationChecks.forEach(a -> System.out.println("[mode2-probe] annotation " + a.element + " " + a.attribute
+                + ": " + a.status + " " + a.expression));
+    }
+
     @SuppressWarnings("unchecked")
     static Mode2Result run(String scenario) throws Exception {
         Mode2Engine.Config c = new Mode2Engine.Config();
@@ -143,7 +262,7 @@ public class Mode2EngineITCase {
         c.vsumState = Scenarios.prepare(scenario, "mode2");
         c.cps = Scenarios.cps();
         c.rootTypes = Scenarios.ROOT_TYPES;
-        c.oclFile = Scenarios.oclFile();
+        c.oclFile = Scenarios.oclFile(scenario);
         c.solverPort = Integer.getInteger("mode2.solverPort", 9411) + scenario.charAt(0) - 'A';
         Mode2Engine engine = new Mode2Engine(c);
         Mode2Result r = engine.analyze();

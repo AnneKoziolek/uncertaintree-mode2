@@ -47,18 +47,37 @@ final class Scenarios {
         pkgReg.put(SimuLinkPackage.eNS_URI, SimuLinkPackage.eINSTANCE);
     }
 
+    static final Path CPS3 = Path.of("src/test/resources/cps3");
+
     static Path oclFile() {
         return CPS1.resolve("overlapping.ocl").toAbsolutePath();
+    }
+
+    /** Base scenario of an id: "A", "B", "C", "D", or the base of a width scenario W-&lt;base&gt;-... */
+    static String base(String scenario) {
+        return scenario.startsWith("W-") ? scenario.split("-")[1] : scenario;
+    }
+
+    /**
+     * Model state and constraints of a scenario: C = UncertainTreeDev's CPS3 (caliper bridge
+     * block on the plate CAD model, grouped real-valued x offset, own constraint); all others CPS1.
+     */
+    static Path caseDir(String scenario) {
+        return "C".equals(base(scenario)) ? CPS3 : CPS1;
+    }
+
+    static Path oclFile(String scenario) {
+        return caseDir(scenario).resolve("overlapping.ocl").toAbsolutePath();
     }
 
     /** Prepares the nominal VSUM folder of a scenario ("A" or "B") under target/, like CPS1's setup. */
     static Path prepare(String scenario, String suffix) throws Exception {
         Path vsumState = Path.of("target", "scenario" + scenario + "-" + suffix).toAbsolutePath();
-        Path original = CPS1.resolve("original_model_state").toAbsolutePath();
+        Path original = caseDir(scenario).resolve("original_model_state").toAbsolutePath();
         Path meta = vsumState.resolve("vsum");
         EnsureTestDirectoryStructureUtils.ensureDirectoryExistsAndClear(vsumState);
         EnsureTestDirectoryStructureUtils.copyOriginalStateToVsumRoot(original, vsumState);
-        String base = scenario.startsWith("W-") ? scenario.split("-")[1] : scenario;
+        String base = base(scenario);
         Path annotations = Path.of("src/test/resources/scenario" + base + "/uncertainties.uncertainty");
         if (!"A".equals(base) && Files.exists(annotations)) { // B, D: own annotations on CPS1's models
             Files.copy(annotations, vsumState.resolve("uncertainties.uncertainty"), StandardCopyOption.REPLACE_EXISTING);

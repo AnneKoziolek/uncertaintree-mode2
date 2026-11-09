@@ -39,6 +39,10 @@ import uncertaintree.vsum.execution.VitruvTestViewDefinition;
 import uncertaintree.vsum.execution.VsumViewSession;
 import za.ac.sun.cs.green.expr.IntConstant;
 import za.ac.sun.cs.green.expr.IntVariable;
+import za.ac.sun.cs.green.expr.RealConstant;
+import za.ac.sun.cs.green.expr.RealVariable;
+import edu.neu.ccs.prl.galette.internal.runtime.Tag;
+import edu.neu.ccs.prl.galette.internal.runtime.Tainter;
 import za.ac.sun.cs.green.expr.BinaryOperation;
 import za.ac.sun.cs.green.expr.Expression;
 import za.ac.sun.cs.green.expr.Operation.Operator;
@@ -81,9 +85,11 @@ public final class Mode2Engine {
         /**
          * Changes that come in on the uncertain model (e.g. from a demonstrator). Applied after
          * the realization of the uncertain values and propagated in the same commit, so every
-         * CPR they trigger reads the tagged values (see docs/mode2-concepts.md, entry 5).
+         * CPR they trigger reads the tagged values (see docs/mode2-concepts.md, entry 4).
          */
         public List<AttributeChange> incomingChanges = new ArrayList<>();
+        /** Optional first input (variable label → value) instead of the default representative; diagnosis. */
+        public Map<String, Number> firstInput;
     }
 
     /** An attribute assignment on an element, identified like Mode 1 does (IdAttributeHandleStrategy). */
@@ -114,7 +120,7 @@ public final class Mode2Engine {
     }
 
     private static final class PathRun {
-        final Map<String, Integer> input;
+        final Map<String, Number> input;
         final List<Expression> branches = new ArrayList<>();
         final Map<String, Boolean> verdicts = new LinkedHashMap<>();
         final List<Mode2Result.Affected> affected = new ArrayList<>();
@@ -127,7 +133,7 @@ public final class Mode2Engine {
         int overflows;
         String overflow;
 
-        PathRun(Map<String, Integer> input) {
+        PathRun(Map<String, Number> input) {
             this.input = input;
         }
     }
@@ -171,17 +177,18 @@ public final class Mode2Engine {
         long ts = System.nanoTime();
         discoverSources();
         invariants = new ArrayList<>();
-        for (String inv : invariants(config.oclFile)) {
-            invariants.add(new OclPipeline(inv));
+        List<String> texts = invariants(config.oclFile);
+        for (int k = 0; k < texts.size(); k++) {
+            invariants.add(new OclPipeline(texts.get(k), k));
         }
         phase("discoverSources", ts);
         ts = System.nanoTime();
 
         List<PathRun> paths = new ArrayList<>();
-        Map<Map<String, Integer>, Expression> expected = new LinkedHashMap<>();
+        Map<Map<String, Number>, Expression> expected = new LinkedHashMap<>();
         Set<String> issuedFlips = new HashSet<>();
-        Deque<Map<String, Integer>> work = new ArrayDeque<>();
-        work.add(initialInput());
+        Deque<Map<String, Number>> work = new ArrayDeque<>();
+        work.add(config.firstInput != null ? new LinkedHashMap<>(config.firstInput) : initialInput());
         // A solver process started per analysis runs Green's translation and Z3's Java API
         // cold (about 130 ms per query); the worker passes one process for its lifetime.
         Mode2Solver own = config.solver == null ? new Mode2Solver(config.solverPort) : null;
@@ -195,13 +202,13 @@ public final class Mode2Engine {
             solver = s;
             while (paths.size() < config.maxPaths) {
                 if (work.isEmpty()) {
-                    Map<String, Integer> uncovered = uncoveredPoint(paths);
+                    Map<String, Number> uncovered = uncoveredPoint(paths);
                     if (uncovered == null) {
                         break;
                     }
                     work.add(uncovered);
                 }
-                Map<String, Integer> input = work.poll();
+                Map<String, Number> input = work.poll();
                 if (covered(paths, input)) {
                     continue;
                 }
@@ -217,7 +224,7 @@ public final class Mode2Engine {
                         continue;
                     }
                     Expression flip = and(conj(p.branches, i), not(p.branches.get(i)));
-                    Map<String, Integer> next = solve(and(and(domain(), flip), preferNonNominal()));
+                    Map<String, Number> next = solve(and(and(domain(), flip), preferNonNominal()));
                     if (next == null) {
                         next = solve(and(domain(), flip));
                     }
@@ -271,6 +278,10 @@ public final class Mode2Engine {
             if (u == null || u.getUncertaintyLocation() == null) {
                 continue;
             }
+            List<UncertaintySource.Member> realMembers = new ArrayList<>();
+            List<Mode2Result.AnnotationCheck> realChecks = new ArrayList<>();
+            double realLo = Double.POSITIVE_INFINITY;
+            double realHi = Double.NEGATIVE_INFINITY;
             for (EObject element : u.getUncertaintyLocation().getReferencedComponents()) {
                 ResolvedUncertaintyDimension dim = resolver.resolve(u, element);
                 String what = u.getId() + " on " + safeHandle(element);
@@ -284,6 +295,26 @@ public final class Mode2Engine {
                 check.element = safeHandle(element);
                 check.attribute = dim.getAttributeName();
                 annotated.add(check);
+                if (type == float.class || type == Float.class || type == double.class || type == Double.class) {
+                    // Real-valued (scenario C): collected per annotation; several elements form one
+                    // shift variable (Mode 1's grouped dimension with a synchronized offset).
+                    EStructuralFeature f = element.eClass().getEStructuralFeature(dim.getAttributeName());
+                    double nominal = ((Number) element.eGet(f)).doubleValue();
+                    double lo = Double.POSITIVE_INFINITY;
+                    double hi = Double.NEGATIVE_INFINITY;
+                    for (PossibleValue v : dim.getPossibleValues()) {
+                        double x = ((Number) v.getValue()).doubleValue();
+                        lo = Math.min(lo, x);
+                        hi = Math.max(hi, x);
+                    }
+                    realMembers.add(new UncertaintySource.Member(handles.createHandle(element), dim.getAttributeName(), nominal));
+                    realChecks.add(check);
+                    // as offsets from the member's nominal value (identical for every member of a group)
+                    realLo = Math.min(realLo, lo - nominal);
+                    realHi = Math.max(realHi, hi - nominal);
+                    annotatedSource.add(null); // replaced below once the source exists
+                    continue;
+                }
                 if (type != int.class && type != Integer.class) {
                     result.unsupported.add(what + ": type " + type + " not yet symbolic (kept nominal)");
                     annotatedSource.add(null);
@@ -312,6 +343,37 @@ public final class Mode2Engine {
                 rs.min = min;
                 rs.max = max;
                 rs.nominal = nominal;
+                rs.members.add(src.handle + "#" + src.attribute);
+                result.sources.add(rs);
+            }
+            if (!realMembers.isEmpty()) {
+                boolean offset = realMembers.size() > 1;
+                UncertaintySource.Member m0 = realMembers.get(0);
+                String label = uniqueLabel(u.getId() + "_" + (offset ? "shift" : m0.attribute), labels);
+                UncertaintySource src = offset
+                        ? new UncertaintySource(label, u.getId(), realMembers, true, realLo, realHi)
+                        : new UncertaintySource(label, u.getId(), realMembers, false, m0.nominal + realLo, m0.nominal + realHi);
+                sources.add(src);
+                for (Mode2Result.AnnotationCheck c : realChecks) {
+                    c.symbolic = true;
+                    annotatedSource.set(annotated.indexOf(c), src);
+                }
+                Mode2Result.Source rs = new Mode2Result.Source();
+                rs.variable = label;
+                rs.uncertainty = u.getId();
+                rs.element = src.handle;
+                rs.attribute = src.attribute;
+                rs.type = "real";
+                rs.offset = offset;
+                rs.minReal = src.minReal;
+                rs.maxReal = src.maxReal;
+                rs.nominalReal = src.nominalReal;
+                rs.min = src.min;
+                rs.max = src.max;
+                rs.nominal = src.nominal;
+                for (UncertaintySource.Member m : realMembers) {
+                    rs.members.add(m.handle + "#" + m.attribute);
+                }
                 result.sources.add(rs);
             }
         }
@@ -348,7 +410,7 @@ public final class Mode2Engine {
 
     // ---------------------------------------------------------------- one path
 
-    private PathRun runPath(Map<String, Integer> input) {
+    private PathRun runPath(Map<String, Number> input) {
         PathRun p = new PathRun(input);
         long t0 = System.nanoTime();
         VitruvTestViewDefinition def = new VitruvTestViewDefinition(config.vsumState, config.cps, config.rootTypes);
@@ -363,14 +425,28 @@ public final class Mode2Engine {
             for (UncertaintySource src : sources) {
                 EObject element = session.resolve(src.handle);
                 any = element;
-                int v = input.get(src.label);
-                if (v == src.nominal) {
+                Number v = input.get(src.label);
+                if (v.doubleValue() == src.nominalReal) {
                     // EMF touch: no change, no propagation. Leave the value and record x == nominal.
-                    fixed.add(new BinaryOperation(Operator.EQ, var(src), new IntConstant(v)));
+                    fixed.add(new BinaryOperation(Operator.EQ, var(src), constant(src, v)));
                     continue;
                 }
-                EStructuralFeature f = element.eClass().getEStructuralFeature(src.attribute);
-                element.eSet(f, Symbolicator.symbolicInRange(src.label, v, src.min, src.max));
+                if (!src.real) {
+                    EStructuralFeature f = element.eClass().getEStructuralFeature(src.attribute);
+                    element.eSet(f, Symbolicator.symbolicInRange(src.label, v.intValue(), src.min, src.max));
+                    continue;
+                }
+                // Real source: every member gets its value with the tag "nominal_i + δ" (shift) or "x".
+                for (UncertaintySource.Member m : src.members) {
+                    EObject target = session.resolve(m.handle);
+                    EStructuralFeature f = target.eClass().getEStructuralFeature(m.attribute);
+                    double value = src.memberValue(m, v.doubleValue());
+                    Tag tag = Tag.of(memberExpression(src, m));
+                    Class<?> type = f.getEType().getInstanceClass();
+                    target.eSet(f, type == float.class || type == Float.class
+                            ? (Object) Tainter.setTag((float) value, tag)
+                            : (Object) Tainter.setTag(value, tag));
+                }
             }
             apply(session, config.incomingChanges);
             session.commit();
@@ -409,7 +485,9 @@ public final class Mode2Engine {
         List<Mode2Result.Affected> list = new ArrayList<>();
         Set<String> sourceKeys = new HashSet<>();
         for (UncertaintySource s : sources) {
-            sourceKeys.add(s.handle + "#" + s.attribute);
+            for (UncertaintySource.Member m : s.members) {
+                sourceKeys.add(m.handle + "#" + m.attribute);
+            }
         }
         for (Resource r : resources) {
             for (TreeIterator<EObject> it = r.getAllContents(); it.hasNext(); ) {
@@ -454,7 +532,7 @@ public final class Mode2Engine {
         for (int i = 0; i < annotated.size(); i++) {
             Mode2Result.AnnotationCheck c = annotated.get(i);
             UncertaintySource own = annotatedSource.get(i);
-            if (own != null && p.input.get(own.label) == own.nominal) {
+            if (own != null && p.input.get(own.label).doubleValue() == own.nominalReal) {
                 continue; // not realized on this path (left at its nominal value, untagged)
             }
             EObject element;
@@ -473,7 +551,8 @@ public final class Mode2Engine {
             if (e == null) {
                 status = own != null ? "resolved" : "untouched";
             } else if (own != null && vars.equals(java.util.Set.of(own.label))) {
-                status = e instanceof IntVariable ? "independent" : "rewritten";
+                status = Exprs.brief(e, 12).equals(Exprs.brief(expectedExpression(own, c.element), 12))
+                        ? "independent" : "rewritten";
             } else {
                 status = "derived";
             }
@@ -511,13 +590,26 @@ public final class Mode2Engine {
                     Expression e = p.annotationExprs.get(i);
                     if (e != null) {
                         identity &= !sat(and(and(domain(), pc(p)),
-                                new BinaryOperation(Operator.NE, e, var(own))));
+                                new BinaryOperation(Operator.NE, e, expectedExpression(own, c.element))));
                     }
                 }
                 c.identityOnDomain = identity;
             }
             result.annotationChecks.add(c);
         }
+    }
+
+    /** The tag the realization gave this annotated element's attribute (variable, or nominal_i + δ). */
+    private static Expression expectedExpression(UncertaintySource s, String handle) {
+        if (!s.real) {
+            return var(s);
+        }
+        for (UncertaintySource.Member m : s.members) {
+            if (m.handle.equals(handle)) {
+                return memberExpression(s, m);
+            }
+        }
+        return var(s);
     }
 
     private static Expression expressionOf(Object v) {
@@ -586,6 +678,11 @@ public final class Mode2Engine {
         }
     }
 
+    /** Probability of the single nominal point: 0 as soon as one variable is real (measure zero). */
+    private double nominalPointProbability() {
+        return sources.stream().anyMatch(x -> x.real) ? 0.0 : 1 / domainSize();
+    }
+
     private double domainSize() {
         double n = 1;
         for (UncertaintySource s : sources) {
@@ -608,6 +705,12 @@ public final class Mode2Engine {
         Expression pc = and(domain(), pc(p));
         Expression box = null;
         for (UncertaintySource s : sources) {
+            if (s.real) {
+                Mode2Result.RealInterval iv = realBounds(pc, s);
+                r.realIntervals.put(s.label, iv);
+                box = and(box, realBox(s, iv));
+                continue;
+            }
             int lo;
             int hi;
             // Default: binary search. On a warm solver it beat Z3 Optimize for scenario A
@@ -633,11 +736,14 @@ public final class Mode2Engine {
         boolean boxInPc = box == null || !sat(and(and(domain(), box), not(pc)));
         r.extentType = pcInBox && boxInPc ? "box" : "predicate";
         if ("box".equals(r.extentType)) {
-            double points = 1;
-            for (int[] iv : r.intervals.values()) {
-                points *= iv[1] - iv[0] + 1;
+            double share = 1;
+            for (UncertaintySource s : sources) {
+                share *= s.real ? r.realIntervals.get(s.label).length() / (s.maxReal - s.minReal)
+                        : (double) (r.intervals.get(s.label)[1] - r.intervals.get(s.label)[0] + 1) / (s.max - s.min + 1);
             }
-            r.probability = points / domainSize();
+            r.probability = share;
+        } else if (!r.realIntervals.isEmpty() && !r.intervals.isEmpty()) {
+            slices(r, pc, p);
         }
         if (p.overflows > 0) {
             r.approximate = true;
@@ -647,14 +753,160 @@ public final class Mode2Engine {
     }
 
     /**
+     * Bounds of a real variable within pc, with open or closed ends: Z3 Optimize (exact for linear
+     * path conditions); if it fails (nonlinear), bisection to a tolerance, marked approximate. The
+     * bounds only serve display and probabilities; exploration uses the path condition (concepts 16).
+     */
+    private Mode2Result.RealInterval realBounds(Expression pc, UncertaintySource s) throws Exception {
+        if (!Exprs.variables(pc).contains(s.label)) {
+            // the variable does not occur (scenario D: a CPR overwrote the attribute): whole domain
+            return new Mode2Result.RealInterval(s.minReal, false, s.maxReal, false);
+        }
+        if (Exprs.nonlinear(pc)) {
+            // Optimize is unreliable or hangs on nonlinear conditions (scenario D, 2026-11-09)
+            double tol = (s.maxReal - s.minReal) * 1e-6;
+            Mode2Result.RealInterval iv = new Mode2Result.RealInterval(
+                    bisect(pc, s, true, tol), false, bisect(pc, s, false, tol), false);
+            iv.approximate = true;
+            return iv;
+        }
+        // Optimize on the closure (Exprs.closure: Z3 4.8.14 gets strict real suprema wrong), then
+        // verify on the original condition and decide each end's openness there.
+        Mode2Solver.Result b = solver.bounds(Exprs.closure(pc), s.label);
+        if (b != null && b.sat() && b.model.get("min") != null && b.model.get("max") != null) {
+            double lo = Double.parseDouble(b.model.get("min"));
+            double hi = Double.parseDouble(b.model.get("max"));
+            boolean tight = !sat(and(pc, cmp(s, Operator.LT, lo))) && !sat(and(pc, cmp(s, Operator.GT, hi)));
+            if (tight) {
+                return new Mode2Result.RealInterval(lo, !sat(and(pc, cmp(s, Operator.EQ, lo))),
+                        hi, !sat(and(pc, cmp(s, Operator.EQ, hi))));
+            }
+            System.out.println("[mode2] optimizer bounds not tight for " + s.label + ", bisection");
+        } else {
+            System.out.println("[mode2] optimizer bounds failed (" + (b == null ? "null" : b.status) + "), bisection for " + s.label);
+        }
+        double tol = (s.maxReal - s.minReal) * 1e-6;
+        Mode2Result.RealInterval iv = new Mode2Result.RealInterval(
+                bisect(pc, s, true, tol), false, bisect(pc, s, false, tol), false);
+        iv.approximate = true;
+        return iv;
+    }
+
+    /** Smallest (lower) or largest real value of s within pc, to tolerance tol. */
+    private double bisect(Expression pc, UncertaintySource s, boolean lower, double tol) throws Exception {
+        double a = s.minReal;
+        double b = s.maxReal;
+        while (b - a > tol) {
+            double m = (a + b) / 2;
+            if (lower) {
+                if (sat(and(pc, cmp(s, Operator.LE, m)))) {
+                    b = m;
+                } else {
+                    a = m;
+                }
+            } else {
+                if (sat(and(pc, cmp(s, Operator.GE, m)))) {
+                    a = m;
+                } else {
+                    b = m;
+                }
+            }
+        }
+        return lower ? a : b;
+    }
+
+    private static Expression realBox(UncertaintySource s, Mode2Result.RealInterval iv) {
+        return and(cmp(s, iv.loOpen ? Operator.GT : Operator.GE, iv.lo), cmp(s, iv.hiOpen ? Operator.LT : Operator.LE, iv.hi));
+    }
+
+    /**
+     * Exact description of a predicate region over integer and real variables: for every
+     * combination of integer values in the region's hull that the path condition admits, the
+     * real intervals. Exact if each slice is the product of its intervals (checked); then the
+     * region's probability is the sum over slices of their real shares, weighted by the integer
+     * combinations' share. Skipped above 2000 combinations.
+     */
+    private void slices(Mode2Result.Region r, Expression pc, PathRun p) throws Exception {
+        // Slice only over integer variables that share a branch constraint with a real variable
+        // (scenario C: the diameter, not the centering diameter, which only has a "!= 0" check);
+        // the exactness check below covers the others over their whole domain.
+        Set<String> realLabels = new HashSet<>();
+        sources.stream().filter(x -> x.real).forEach(x -> realLabels.add(x.label));
+        Set<String> coupled = new HashSet<>();
+        for (Expression b : p.branches) {
+            Set<String> vars = Exprs.variables(b);
+            if (vars.stream().anyMatch(realLabels::contains)) {
+                coupled.addAll(vars);
+            }
+        }
+        List<UncertaintySource> ints = sources.stream().filter(x -> !x.real && coupled.contains(x.label)).toList();
+        long combinations = 1;
+        for (UncertaintySource s : ints) {
+            combinations *= r.intervals.get(s.label)[1] - r.intervals.get(s.label)[0] + 1;
+        }
+        if (combinations > 2000) {
+            return;
+        }
+        double intDomain = 1;
+        for (UncertaintySource s : ints) {
+            intDomain *= s.max - s.min + 1;
+        }
+        double probability = 0;
+        boolean exact = true;
+        int[] at = new int[ints.size()];
+        for (int k = 0; k < ints.size(); k++) {
+            at[k] = r.intervals.get(ints.get(k).label)[0];
+        }
+        for (long c = 0; c < combinations; c++) {
+            Expression fixedPc = pc;
+            Mode2Result.Slice sl = new Mode2Result.Slice();
+            for (int k = 0; k < ints.size(); k++) {
+                fixedPc = and(fixedPc, new BinaryOperation(Operator.EQ, var(ints.get(k)), new IntConstant(at[k])));
+                sl.at.put(ints.get(k).label, at[k]);
+            }
+            if (sat(fixedPc)) {
+                Expression box = null;
+                double share = 1;
+                for (UncertaintySource s : sources) {
+                    if (s.real) {
+                        Mode2Result.RealInterval iv = realBounds(fixedPc, s);
+                        sl.real.put(s.label, iv);
+                        box = and(box, realBox(s, iv));
+                        share *= iv.length() / (s.maxReal - s.minReal);
+                        exact &= !iv.approximate;
+                    }
+                }
+                Expression fixedDomain = domain();
+                for (int k = 0; k < ints.size(); k++) {
+                    fixedDomain = and(fixedDomain, new BinaryOperation(Operator.EQ, var(ints.get(k)), new IntConstant(at[k])));
+                }
+                exact &= !sat(and(and(fixedDomain, box), not(pc))); // the slice is exactly its intervals
+                probability += share / intDomain;
+                r.slices.add(sl);
+            }
+            for (int k = ints.size() - 1; k >= 0; k--) { // next combination
+                if (++at[k] <= r.intervals.get(ints.get(k).label)[1]) {
+                    break;
+                }
+                at[k] = r.intervals.get(ints.get(k).label)[0];
+            }
+        }
+        if (exact) {
+            r.probability = probability;
+        } else {
+            r.slices.clear(); // not exact: the reported intervals would claim more than they are
+        }
+    }
+
+    /**
      * Evaluates the nominal state on the unchanged model and compares it with the region that
      * contains the nominal point. Different verdicts mean the nominal state is not a fixpoint of
      * the CPRs; the nominal point then becomes a region of its own.
      */
     private void nominalCheck(List<PathRun> paths) throws Exception {
-        Map<String, Integer> nominal = new LinkedHashMap<>();
+        Map<String, Number> nominal = new LinkedHashMap<>();
         for (UncertaintySource s : sources) {
-            nominal.put(s.label, s.nominal);
+            nominal.put(s.label, s.nominalValue());
         }
         Map<String, Boolean> verdicts = new LinkedHashMap<>();
         VitruvTestViewDefinition def = new VitruvTestViewDefinition(config.vsumState, config.cps, config.rootTypes);
@@ -691,19 +943,23 @@ public final class Mode2Engine {
                 from.excludesNominal = true;
                 from.extentType = "predicate"; // a box minus one point
                 if (from.probability != null) {
-                    from.probability -= 1 / domainSize();
+                    from.probability -= nominalPointProbability();
                 }
             }
             Mode2Result.Region point = new Mode2Result.Region();
             point.extentType = "box";
             for (UncertaintySource s : sources) {
-                point.intervals.put(s.label, new int[] {s.nominal, s.nominal});
+                if (s.real) {
+                    point.realIntervals.put(s.label, new Mode2Result.RealInterval(s.nominalReal, false, s.nominalReal, false));
+                } else {
+                    point.intervals.put(s.label, new int[] {s.nominal, s.nominal});
+                }
             }
             point.representative.putAll(nominal);
             point.verdicts.putAll(verdicts);
             point.consistent = n.consistent;
             point.pathCondition.add("nominal state (unchanged model)");
-            point.probability = 1 / domainSize();
+            point.probability = nominalPointProbability();
             result.regions.add(point);
             n.region = result.regions.size() - 1;
         }
@@ -733,7 +989,7 @@ public final class Mode2Engine {
         return a;
     }
 
-    private boolean covered(List<PathRun> paths, Map<String, Integer> input) throws Exception {
+    private boolean covered(List<PathRun> paths, Map<String, Number> input) throws Exception {
         Expression point = point(input);
         for (PathRun p : paths) {
             if (sat(and(and(domain(), pc(p)), point))) {
@@ -744,32 +1000,42 @@ public final class Mode2Engine {
     }
 
     /** A domain point outside all explored regions, or null if the regions cover the domain. */
-    private Map<String, Integer> uncoveredPoint(List<PathRun> paths) throws Exception {
+    private Map<String, Number> uncoveredPoint(List<PathRun> paths) throws Exception {
         Expression outside = domain();
         for (PathRun p : paths) {
             outside = and(outside, not(pc(p)));
         }
-        Map<String, Integer> m = solve(and(outside, preferNonNominal()));
+        Map<String, Number> m = solve(and(outside, preferNonNominal()));
         return m != null ? m : solve(outside);
     }
 
-    private Map<String, Integer> initialInput() {
-        Map<String, Integer> in = new LinkedHashMap<>();
+    private Map<String, Number> initialInput() {
+        Map<String, Number> in = new LinkedHashMap<>();
         for (UncertaintySource s : sources) {
-            in.put(s.label, s.nominal != s.min ? s.min : s.max);
+            if (s.real) {
+                in.put(s.label, s.nominalReal != s.minReal ? s.minReal : s.maxReal);
+            } else {
+                in.put(s.label, s.nominal != s.min ? s.min : s.max);
+            }
         }
         return in;
     }
 
-    private Map<String, Integer> solve(Expression q) throws Exception {
+    private Map<String, Number> solve(Expression q) throws Exception {
         Mode2Solver.Result r = solver.check(q);
         if (!r.sat()) {
             return null;
         }
-        Map<String, Integer> in = new LinkedHashMap<>();
+        Map<String, Number> in = new LinkedHashMap<>();
         for (UncertaintySource s : sources) {
             String v = r.model.get(s.label);
-            in.put(s.label, v == null ? s.nominal : Integer.parseInt(v));
+            if (v == null) {
+                in.put(s.label, s.nominalValue());
+            } else if (s.real) {
+                in.put(s.label, Double.parseDouble(v.replace("?", ""))); // RatNum.toDecimalString marks truncation
+            } else {
+                in.put(s.label, Integer.parseInt(v));
+            }
         }
         return in;
     }
@@ -781,7 +1047,7 @@ public final class Mode2Engine {
     private Expression domain() {
         Expression d = null;
         for (UncertaintySource s : sources) {
-            d = and(d, and(ge(s, s.min), le(s, s.max)));
+            d = s.real ? and(d, and(ge(s, s.minReal), le(s, s.maxReal))) : and(d, and(ge(s, s.min), le(s, s.max)));
         }
         return d == null ? new BinaryOperation(Operator.EQ, new IntConstant(0), new IntConstant(0)) : d;
     }
@@ -790,16 +1056,16 @@ public final class Mode2Engine {
         Expression d = null;
         for (UncertaintySource s : sources) {
             if (s.hasAlternatives()) {
-                d = and(d, new BinaryOperation(Operator.NE, var(s), new IntConstant(s.nominal)));
+                d = and(d, new BinaryOperation(Operator.NE, var(s), constant(s, s.nominalValue())));
             }
         }
         return d;
     }
 
-    private Expression point(Map<String, Integer> input) {
+    private Expression point(Map<String, Number> input) {
         Expression d = null;
         for (UncertaintySource s : sources) {
-            d = and(d, new BinaryOperation(Operator.EQ, var(s), new IntConstant(input.get(s.label))));
+            d = and(d, new BinaryOperation(Operator.EQ, var(s), constant(s, input.get(s.label))));
         }
         return d;
     }
@@ -809,16 +1075,29 @@ public final class Mode2Engine {
     }
 
     /** Bounded integer variable (Z3 Int with the annotation's domain), as Knarr's symbolicInRange creates it. */
-    private static IntVariable var(UncertaintySource s) {
-        return new IntVariable(s.label, s.min, s.max);
+    private static Expression var(UncertaintySource s) {
+        return s.real ? new RealVariable(s.label, s.minReal, s.maxReal) : new IntVariable(s.label, s.min, s.max);
     }
 
-    private static Expression ge(UncertaintySource s, int v) {
-        return new BinaryOperation(Operator.GE, var(s), new IntConstant(v));
+    private static Expression constant(UncertaintySource s, Number v) {
+        return s.real ? new RealConstant(v.doubleValue()) : new IntConstant(v.intValue());
     }
 
-    private static Expression le(UncertaintySource s, int v) {
-        return new BinaryOperation(Operator.LE, var(s), new IntConstant(v));
+    /** Tag expression of a real source's member: {@code nominal_i + δ} for a shift, else the variable. */
+    private static Expression memberExpression(UncertaintySource s, UncertaintySource.Member m) {
+        return s.offset ? new BinaryOperation(Operator.ADD, new RealConstant(m.nominal), var(s)) : var(s);
+    }
+
+    private static Expression ge(UncertaintySource s, Number v) {
+        return new BinaryOperation(Operator.GE, var(s), constant(s, v));
+    }
+
+    private static Expression cmp(UncertaintySource s, Operator op, double v) {
+        return new BinaryOperation(op, var(s), constant(s, v));
+    }
+
+    private static Expression le(UncertaintySource s, Number v) {
+        return new BinaryOperation(Operator.LE, var(s), constant(s, v));
     }
 
     private static Expression not(Expression e) {

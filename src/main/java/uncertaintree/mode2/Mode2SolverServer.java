@@ -168,6 +168,9 @@ public final class Mode2SolverServer {
         HashMap<String, String> result = new HashMap<>();
         for (boolean min : new boolean[] {true, false}) {
             Optimize opt = ctx.mkOptimize();
+            com.microsoft.z3.Params limit = ctx.mkParams();
+            limit.add("timeout", Integer.getInteger("mode2.optimizeTimeoutMs", 10000)); // then the engine bisects
+            opt.setParameters(limit);
             opt.Add(constraint);
             Optimize.Handle<?> h = min ? opt.MkMinimize(x) : opt.MkMaximize(x);
             Status st = opt.Check();
@@ -177,7 +180,15 @@ public final class Mode2SolverServer {
             if (st != Status.SATISFIABLE) {
                 throw new IllegalStateException("optimizer: " + st);
             }
-            result.put(min ? "min" : "max", decimal(h.getValue()));
+            Expr value = h.getValue();
+            String text = decimal(value);
+            if (!(value instanceof IntNum) && !(value instanceof RatNum) && !(value instanceof BitVecNum)) {
+                // Strict bound of a real variable: Z3 answers "b + epsilon" or "b - epsilon"
+                // (an infinitesimal); report b and an open end.
+                text = Double.toString(evalEpsilonFree(value.toString()));
+                result.put(min ? "minOpen" : "maxOpen", Boolean.toString(value.toString().contains("epsilon")));
+            }
+            result.put(min ? "min" : "max", text);
         }
         return result;
     }
@@ -187,6 +198,48 @@ public final class Mode2SolverServer {
         Socket s = ss.accept();
         s.setTcpNoDelay(true);
         return s;
+    }
+
+    /**
+     * Value of an SMT-LIB arithmetic term with the infinitesimal {@code epsilon} set to 0, e.g.
+     * "(+ (- 5.0) epsilon)" or "(+ 5.0 (* (- 1.0) epsilon))"; also plain numerals and "a/b".
+     */
+    static double evalEpsilonFree(String term) {
+        java.util.List<String> tokens = new java.util.ArrayList<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\(|\\)|[^\\s()]+").matcher(term);
+        while (m.find()) {
+            tokens.add(m.group());
+        }
+        int[] pos = {0};
+        return eval(tokens, pos);
+    }
+
+    private static double eval(java.util.List<String> t, int[] pos) {
+        String tok = t.get(pos[0]++);
+        if (!"(".equals(tok)) {
+            if ("epsilon".equals(tok)) {
+                return 0.0;
+            }
+            if (tok.contains("/")) {
+                String[] q = tok.split("/");
+                return Double.parseDouble(q[0]) / Double.parseDouble(q[1]);
+            }
+            return Double.parseDouble(tok.replace("?", ""));
+        }
+        String op = t.get(pos[0]++);
+        java.util.List<Double> args = new java.util.ArrayList<>();
+        while (!")".equals(t.get(pos[0]))) {
+            args.add(eval(t, pos));
+        }
+        pos[0]++;
+        switch (op) {
+            case "+": return args.stream().mapToDouble(Double::doubleValue).sum();
+            case "-": return args.size() == 1 ? -args.get(0) : args.get(0) - args.stream().skip(1).mapToDouble(Double::doubleValue).sum();
+            case "*": return args.stream().mapToDouble(Double::doubleValue).reduce(1, (a, b) -> a * b);
+            case "/": return args.get(0) / args.get(1);
+            case "to_real": return args.get(0);
+            default: throw new IllegalArgumentException("unsupported term " + op + " in " + t);
+        }
     }
 
     private static String decimal(Expr e) {

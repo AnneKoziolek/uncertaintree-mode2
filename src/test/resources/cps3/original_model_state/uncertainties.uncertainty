@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<uncertainty:UncertaintyAnnotationRepository xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:uncertainty="http://vitruv.tools/uncertainty/model">
+  <uncertainties reducability="Unknown" setManually="true" id="BrakeDiscDiameterDiameterUncertainty">
+    <uncertaintyLocation parameterLocation="diameterInMM">
+      <referencedComponents href="brakesystem.brakesystem#//@BrakeComponents.0"/>
+    </uncertaintyLocation>
+    <effect representation="Discrete" specification="">
+      <range xsi:type="uncertainty:ParameterizedDiscreteRange" min="2" max="5"/>
+    </effect>
+    <pattern patternType="Random"/>
+    <perspective perspective="Objective"/>
+    <source source="RESOURCES" specification="Tolerances of the supplier."/>
+  </uncertainties>
+  <uncertainties reducability="Unknown" setManually="true" id="BrakeDiscCenteringDiameterDiameterUncertainty">
+    <uncertaintyLocation parameterLocation="centeringDiameterInMM">
+      <referencedComponents href="brakesystem.brakesystem#//@BrakeComponents.0"/>
+    </uncertaintyLocation>
+    <effect representation="Discrete">
+      <range xsi:type="uncertainty:ParameterizedDiscreteRange" min="2" max="3"/>
+    </effect>
+    <pattern patternType="Random"/>
+    <perspective perspective="Objective"/>
+    <source source="RESOURCES"/>
+  </uncertainties>
+  <uncertainties id="BrakeCaliperBridgeElementPositionUncertainty">
+    <uncertaintyLocation parameterLocation="x">
+      <referencedComponents href="brake_disc_and_caliper_plate.cad#//@namespaces.1/@parameters.0"/>
+      <referencedComponents href="brake_disc_and_caliper_plate.cad#//@namespaces.1/@parameters.1"/>
+      <referencedComponents href="brake_disc_and_caliper_plate.cad#//@namespaces.1/@parameters.2"/>
+      <referencedComponents href="brake_disc_and_caliper_plate.cad#//@namespaces.1/@parameters.3"/>
+    </uncertaintyLocation>
+    <effect representation="Continous">
+      <range xsi:type="uncertainty:ParameterizedContinuousRange" min="5.0" max="5.0" stepSize="0.5"/>
+    </effect>
+    <pattern patternType="Random"/>
+    <perspective perspective="Objective"/>
+    <source source="ENVIRONMENT"/>
+  </uncertainties>
+</uncertainty:UncertaintyAnnotationRepository>

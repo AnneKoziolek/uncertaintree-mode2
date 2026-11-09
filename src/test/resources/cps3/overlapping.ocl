@@ -1,0 +1,6 @@
+context brakesystem::BrakeDisk
+inv: let cadDisk=cad::Namespace.allInstances().select(b|b.id == self.id) in 
+     let brakeCaliper=brakesystem::BrakeCaliper.allInstances().first() in 
+     let cadCaliper=cad::Namespace.allInstances().select(b|b.id == brakeCaliper.id) in
+     let radius:Real = self.diameterInMM.oclAsType(Real) / 2 in
+    cadCaliper.parameters.select(p|p.oclIsTypeOf(cad::Coordinate)).forAll(p|p.oclAsType(cad::Coordinate).x >= radius)

@@ -54,6 +54,12 @@ class Mode1BaselineTest {
         baseline("B");
     }
 
+    /** Scenario C: UncertainTreeDev's CPS3 (1008 states, grouped real-valued caliper shift). */
+    @Test
+    void scenarioC() throws Exception {
+        baseline("C");
+    }
+
     static void baseline(String scenario) throws Exception {
         Path vsumState = Scenarios.prepare(scenario, "mode1");
         VsumUtils util = new VsumUtils();
@@ -69,17 +75,17 @@ class Mode1BaselineTest {
 
         Path results = Path.of("target", "mode1-results-" + scenario).toAbsolutePath();
         Files.createDirectories(results);
-        CliOclEvaluator ocl = new CliOclEvaluator(Scenarios.oclFile(), results);
+        CliOclEvaluator ocl = new CliOclEvaluator(Scenarios.oclFile(scenario), results);
         VsumStateExecutor<VitruvTestViewDefinition> executor =
                 new VsumStateExecutor<>(new CopyingVitruvViewProvider(util, new IdBasedVsumObjectResolver()));
         VitruvTestViewDefinition def = new VitruvTestViewDefinition(vsumState, Scenarios.cps(), Scenarios.ROOT_TYPES);
         List<Path> ecores = List.of(ECORE_DIR.resolve("cad.ecore"), ECORE_DIR.resolve("brakesystem.ecore"));
 
+        // Same names as Mode 2 (declared name, or inv<position> for an unnamed invariant).
         List<String> names = new ArrayList<>();
-        java.util.regex.Matcher inv = java.util.regex.Pattern.compile("(?m)^\\s*inv\\s+(\\w+)\\s*:")
-                .matcher(Files.readString(Scenarios.oclFile()));
-        while (inv.find()) {
-            names.add(inv.group(1));
+        List<String> texts = Mode2Engine.invariants(Scenarios.oclFile(scenario));
+        for (int k = 0; k < texts.size(); k++) {
+            names.add(OclPipeline.nameOf(texts.get(k), k));
         }
         long t0 = System.nanoTime();
         List<Map<String, Object>> out = new ArrayList<>();

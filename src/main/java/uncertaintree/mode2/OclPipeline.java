@@ -37,10 +37,15 @@ final class OclPipeline {
 
     private record Parsed(ParseTree tree, boolean syntaxErrors) {}
 
-    OclPipeline(String text) {
+    OclPipeline(String text, int index) {
         this.text = text;
-        int at = text.indexOf("inv ") + 4;
-        this.name = text.substring(at, text.indexOf(':', at)).trim();
+        this.name = nameOf(text, index);
+    }
+
+    /** Declared invariant name, or "inv&lt;index+1&gt;" for an unnamed {@code inv:} (CPS3). */
+    static String nameOf(String text, int index) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\binv\\s*(\\w*)\\s*:").matcher(text);
+        return m.find() && !m.group(1).isEmpty() ? m.group(1) : "inv" + (index + 1);
     }
 
     /** Verdict on the model behind {@code wrapper}; false on any compile or evaluation error, as before. */
