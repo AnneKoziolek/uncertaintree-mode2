@@ -4,7 +4,7 @@
   UncertainTree brake case on Bell's Knarr/Galette (knarr-integration).
 
   Build only against the isolated repository:
-    mvn -Dmaven.repo.local=/workspace/.m2-bell verify
+    scripts/mvn.sh verify   (JDK 21 and -Dmaven.repo.local=/workspace/.m2-bell)
   Integration tests (*ITCase) run inside Knarr's Galette-instrumented JDK
   (/workspace/knarr-bell/knarr/target/galette/java) with the Galette agent.
 -->
@@ -25,7 +25,8 @@
     <version>0.1.0-SNAPSHOT</version>
 
     <properties>
-        <maven.compiler.release>17</maven.compiler.release>
+        <!-- JDK 21 since 2026-11-09 (build with scripts/mvn.sh, which sets JAVA_HOME) -->
+        <maven.compiler.release>21</maven.compiler.release>
         <galette.version>1.1.0-SNAPSHOT</galette.version>
         <knarr.version>0.0.3-SNAPSHOT</knarr.version>
         <ut.version>0.1.0-SNAPSHOT</ut.version>

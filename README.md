@@ -28,7 +28,9 @@ Mode 2 of UncertainTree: symbolic execution of consistency preservation with CoC
 Requires the stack's Bell builds (Green, Galette, Knarr) in the separate Maven repository `/workspace/.m2-bell`, UncertainTreeDev's brake case installed there, and Knarr's instrumented JDK (`/workspace/knarr-bell/knarr/target/galette/java`). The stack's `scripts/build-mode2-stack.sh` builds all of it (the stack's devcontainer post-create runs it); manual commands: `docs/mode2-log.md`, section "Reproduce".
 
 ```
-mvn -B -Dmaven.repo.local=/workspace/.m2-bell verify
+scripts/mvn.sh verify
 ```
+
+`scripts/mvn.sh` runs Maven with JDK 21 (since 2026-11-09; `MODE2_JAVA_HOME`) and the Bell stack's repository (`MODE2_REPO`); the worker scripts use the same JDK.
 
 Clear `target/galette-cache` whenever `branch.prefixes` in the pom changes: Galette's transformation cache does not include it in its key.

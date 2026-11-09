@@ -9,6 +9,8 @@
 # (see docs/mode2-log.md in the stack repo, section "Reproduce"). Other locations:
 # MODE2_REPO (Maven repository), MODE2_JAVA (instrumented java binary).
 set -euo pipefail
+export JAVA_HOME="${MODE2_JAVA_HOME:-/opt/microsoft-jdk-21.0.10}"   # Mode-2 JDK (21 since 2026-11-09)
+export PATH="$JAVA_HOME/bin:$PATH"
 cd "$(dirname "$0")/.."
 PORT="${1:-8099}"
 WARMUP="${2:-}"
@@ -32,5 +34,5 @@ exec "$JAVA" -cp "$CP" \
   -Xmx4g \
   -Dgalette.symbolic.branchPrefixes="$PREFIXES" \
   -Dgalette.cache="$PWD/target/galette-cache" \
-  -Dmode2.plainJava="${PLAIN_JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}" \
+  -Dmode2.plainJava="${PLAIN_JAVA_HOME:-$JAVA_HOME}" \
   uncertaintree.mode2.Mode2Worker "$PORT" ${WARMUP:+"$WARMUP"}

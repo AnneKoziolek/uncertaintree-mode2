@@ -12,6 +12,8 @@
 # builds both (see the stack's docs/mode2-log.md, section "Reproduce").
 # Other locations: MODE2_REPO (Maven repository), MODE2_JAVA (as in run-worker.sh).
 set -euo pipefail
+export JAVA_HOME="${MODE2_JAVA_HOME:-/opt/microsoft-jdk-21.0.10}"   # Mode-2 JDK (21 since 2026-11-09)
+export PATH="$JAVA_HOME/bin:$PATH"
 cd "$(dirname "$0")/.."
 SCENARIO="${1:-A}"
 PORT="${2:-8099}"
