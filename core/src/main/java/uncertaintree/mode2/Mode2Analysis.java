@@ -780,8 +780,8 @@ public final class Mode2Analysis {
         // verify on the original condition and decide each end's openness there.
         Mode2Solver.Result b = solver.bounds(Exprs.closure(pc), s.label);
         if (b != null && b.sat() && b.model.get("min") != null && b.model.get("max") != null) {
-            double lo = Double.parseDouble(b.model.get("min"));
-            double hi = Double.parseDouble(b.model.get("max"));
+            double lo = Double.parseDouble(b.model.get("min").replace("?", "")); // "?" marks a truncated decimal
+            double hi = Double.parseDouble(b.model.get("max").replace("?", ""));
             boolean tight = !sat(and(pc, cmp(s, Operator.LT, lo))) && !sat(and(pc, cmp(s, Operator.GT, hi)));
             if (tight) {
                 return new Mode2Result.RealInterval(lo, !sat(and(pc, cmp(s, Operator.EQ, lo))),
