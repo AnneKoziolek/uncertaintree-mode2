@@ -70,6 +70,13 @@ public final class Mode2Analysis {
          * condition it satisfies, decided by the solver (exact also for non-box regions).
          */
         public List<Map<String, Number>> points = new ArrayList<>();
+        /**
+         * Whether region extents (intervals, slices, probabilities) are computed. A design study
+         * needs only the regions' verdicts and the classification of its points, which uses the
+         * path conditions directly; on nonlinear path conditions with several real sources the
+         * bounds can take hours (demonstrator, 2026-11-11).
+         */
+        public boolean extents = true;
     }
 
     /** An attribute assignment on an element, identified by the backend's handle. */
@@ -258,6 +265,7 @@ public final class Mode2Analysis {
             }
             varyingStructure(paths);
             summarizeAnnotations(paths);
+            verdictClasses();
             long tp = System.nanoTime();
             classify(paths);
             phase("classify", tp);
@@ -692,6 +700,14 @@ public final class Mode2Analysis {
             r.pathCondition.add(Exprs.brief(b, 10));
         }
         r.affected.addAll(p.affected);
+        if (!config.extents) {
+            r.extentType = "none";
+            if (p.overflows > 0) {
+                r.approximate = true;
+                r.approximateReason = p.overflows + " overflow(s) on symbolic values, first: " + p.overflow;
+            }
+            return r;
+        }
         Expression pc = and(domain(), pc(p));
         Expression box = null;
         for (UncertaintySource s : sources) {
@@ -1028,6 +1044,25 @@ public final class Mode2Analysis {
         return in;
     }
 
+    /** Regions grouped by identical verdicts, in order of first occurrence (for display). */
+    private void verdictClasses() {
+        Map<Map<String, Boolean>, Mode2Result.VerdictClass> classes = new LinkedHashMap<>();
+        for (int i = 0; i < result.regions.size(); i++) {
+            Mode2Result.Region r = result.regions.get(i);
+            Mode2Result.VerdictClass c = classes.computeIfAbsent(new LinkedHashMap<>(r.verdicts), v -> {
+                Mode2Result.VerdictClass n = new Mode2Result.VerdictClass();
+                n.verdicts.putAll(v);
+                n.consistent = r.consistent;
+                return n;
+            });
+            c.regions.add(i);
+            if (c.probability != null || c.regions.size() == 1) {
+                c.probability = r.probability == null ? null : (c.probability == null ? 0 : c.probability) + r.probability;
+            }
+        }
+        result.verdictClasses.addAll(classes.values());
+    }
+
     /** Region of every requested point (see {@link Options#points}); -1 outside the annotated domain. */
     private void classify(List<PathRun> paths) throws Exception {
         Expression dom = domain();
@@ -1057,6 +1092,7 @@ public final class Mode2Analysis {
                         break;
                     }
                 }
+                pr.unexplored = pr.region < 0; // in the domain, but the exploration stopped before reaching it
             }
             pr.consistent = pr.region >= 0 && result.regions.get(pr.region).consistent;
             result.points.add(pr);

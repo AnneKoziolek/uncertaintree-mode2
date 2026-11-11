@@ -120,7 +120,8 @@ public final class Mode2SolverServer {
                         prepNanos += q0 - r0;
                         solver.push();
                         solver.add((BoolExpr) t.getTranslation());
-                        Status st = solver.check();
+                        Status st = within(ctx, solver::check,
+                                limitMs != null ? limitMs : Integer.getInteger("mode2.checkTimeoutMs", 30000));
                         status = st.toString();
                         if (st == Status.SATISFIABLE) {
                             model = new HashMap<>();
@@ -171,6 +172,40 @@ public final class Mode2SolverServer {
     }
 
     /** Map with "min" and "max" of {@code var} under {@code e}, or null if {@code e} is unsatisfiable. */
+    /** One thread for Z3 calls, so the connection's thread can enforce a wall-clock limit. */
+    private static final java.util.concurrent.ExecutorService Z3 = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "z3");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /** Checks stopped by the wall-clock limit (Z3 did not honour its own timeout). */
+    static int hardStops;
+
+    /**
+     * Runs a Z3 check with a hard wall-clock limit: Z3's own timeout parameter is not honoured on
+     * every nonlinear query (one bisection step ran over two hours with a 2 s limit, demonstrator
+     * 2026-11-11). After the limit plus 5 s the context is interrupted and the answer is UNKNOWN.
+     */
+    static Status within(Context ctx, java.util.concurrent.Callable<Status> check, int limitMs) throws Exception {
+        java.util.concurrent.Future<Status> f = Z3.submit(check);
+        try {
+            return f.get(limitMs + 5000L, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException timeout) {
+            ctx.interrupt();
+            hardStops++;
+            System.out.println("[mode2-solver] server: check stopped after " + (limitMs + 5000) + " ms (" + hardStops + " so far)");
+            try {
+                f.get(60, java.util.concurrent.TimeUnit.SECONDS); // the interrupted check returns UNKNOWN
+            } catch (Exception ignored) {
+                // still running or failed: the answer stays UNKNOWN
+            }
+            return Status.UNKNOWN;
+        } catch (java.util.concurrent.ExecutionException failed) {
+            throw failed.getCause() instanceof Exception ? (Exception) failed.getCause() : failed;
+        }
+    }
+
     private static HashMap<String, String> bounds(Context ctx, Expression e, String var) throws Exception {
         Z3JavaTranslator t = new Z3JavaTranslator(ctx);
         e.accept(t);
@@ -192,7 +227,7 @@ public final class Mode2SolverServer {
             opt.setParameters(limit);
             opt.Add(constraint);
             Optimize.Handle<?> h = min ? opt.MkMinimize(x) : opt.MkMaximize(x);
-            Status st = opt.Check();
+            Status st = within(ctx, opt::Check, Integer.getInteger("mode2.optimizeTimeoutMs", 10000));
             if (st == Status.UNSATISFIABLE) {
                 return null;
             }

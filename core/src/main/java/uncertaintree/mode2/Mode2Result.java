@@ -32,6 +32,21 @@ public final class Mode2Result {
     public List<String> elementsVaryingBetweenRegions = new ArrayList<>();
     /** Per annotated attribute (symbolic or not): what the rules did with it on the explored paths. */
     public List<AnnotationCheck> annotationChecks = new ArrayList<>();
+    /**
+     * Regions with identical verdicts, merged for display: paths often differ by branches that
+     * change no verdict (a rounding guard, a part the invariants exempt), so several regions can
+     * form one verdict class. The regions stay (points refer to their indices).
+     */
+    public List<VerdictClass> verdictClasses = new ArrayList<>();
+
+    /** Regions with identical verdicts; probability is their sum where every region has one. */
+    public static final class VerdictClass {
+        public Map<String, Boolean> verdicts = new LinkedHashMap<>();
+        public boolean consistent;
+        public List<Integer> regions = new ArrayList<>();
+        public Double probability;
+    }
+
     /** The requested points (Mode2Analysis.Options#points) with their regions, in request order. */
     public List<PointRegion> points = new ArrayList<>();
     public Stats stats = new Stats();
@@ -42,6 +57,8 @@ public final class Mode2Result {
         public int region = -1;
         /** Whether that region satisfies every invariant. */
         public boolean consistent;
+        /** In the annotated domain but in no explored region (exploration stopped at maxPaths or a coverage gap). */
+        public boolean unexplored;
         /** Labels of the request that name no source (not part of this analysis). */
         public List<String> ignored = new ArrayList<>();
     }
