@@ -32,7 +32,19 @@ public final class Mode2Result {
     public List<String> elementsVaryingBetweenRegions = new ArrayList<>();
     /** Per annotated attribute (symbolic or not): what the rules did with it on the explored paths. */
     public List<AnnotationCheck> annotationChecks = new ArrayList<>();
+    /** The requested points (Mode2Analysis.Options#points) with their regions, in request order. */
+    public List<PointRegion> points = new ArrayList<>();
     public Stats stats = new Stats();
+
+    /** A requested point and the region whose path condition it satisfies (-1: outside the annotated domain). */
+    public static final class PointRegion {
+        public Map<String, Number> values = new LinkedHashMap<>();
+        public int region = -1;
+        /** Whether that region satisfies every invariant. */
+        public boolean consistent;
+        /** Labels of the request that name no source (not part of this analysis). */
+        public List<String> ignored = new ArrayList<>();
+    }
 
     /**
      * The nominal state, evaluated on the unchanged model (no propagation: setting the current
@@ -230,6 +242,10 @@ public final class Mode2Result {
         /** Executed inputs whose path differed from the path predicted by the solver. */
         public int divergences;
         public int solverQueries;
+        /** The solver found a point outside every region that, rounded to decimals, lies inside one; exploration stopped there (a boundary sliver stays uncovered). */
+        public int coverageGaps;
+        /** Solver checks that ended UNKNOWN (timeout); treated as unsatisfiable, so a region may be missing. */
+        public int solverUnknowns;
         public long solverMillis;
         public long totalMillis;
         public List<Long> pathMillis = new ArrayList<>();

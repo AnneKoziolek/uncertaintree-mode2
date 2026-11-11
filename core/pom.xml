@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mode 2 core: exploration, symbolic realization, regions, solver. Independent of the
+  Vitruvius version and of the OCL evaluator (see Mode2Backend); used by the UncertainTree
+  backend in the parent directory (Vitruvius 3.1.2) and by the demonstrator backend
+  (Vitruvius 4). Build with ../scripts/mvn.sh -f core install (JDK 21, .m2-bell).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>uncertaintree.mode2</groupId>
+    <artifactId>uncertaintree-mode2-core</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <galette.version>1.1.0-SNAPSHOT</galette.version>
+        <knarr.version>0.0.3-SNAPSHOT</knarr.version>
+    </properties>
+
+    <dependencies>
+        <!-- Knarr on Galette (Bell), + CmpDifference fix on cocopath-uncertaintree; brings Green -->
+        <dependency>
+            <groupId>edu.gmu.swe.knarr</groupId>
+            <artifactId>Knarr</artifactId>
+            <version>${knarr.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>edu.neu.ccs.prl.galette</groupId>
+            <artifactId>galette-agent</artifactId>
+            <version>${galette.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- EMF only for EObject/Resource in the backend interface; the backend brings its own version -->
+        <dependency>
+            <groupId>org.eclipse.emf</groupId>
+            <artifactId>org.eclipse.emf.ecore</artifactId>
+            <version>2.38.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Z3 for Mode2SolverServer (plain JVM); Green's installed pom is invalid, so
+             its z3-turnkey dependency is not inherited. -->
+        <dependency>
+            <groupId>io.github.tudo-aqua</groupId>
+            <artifactId>z3-turnkey</artifactId>
+            <version>4.8.14</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -6,4 +6,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export JAVA_HOME="${MODE2_JAVA_HOME:-/opt/microsoft-jdk-21.0.10}"
 export PATH="$JAVA_HOME/bin:$PATH"
+# The Mode-2 core (core/, Vitruvius-independent) is installed first, unless MODE2_SKIP_CORE=1.
+if [ "${MODE2_SKIP_CORE:-0}" != 1 ]; then
+    mvn -B -q -Dmaven.repo.local="${MODE2_REPO:-/workspace/.m2-bell}" -f core/pom.xml install
+fi
 exec mvn -B -Dmaven.repo.local="${MODE2_REPO:-/workspace/.m2-bell}" "$@"

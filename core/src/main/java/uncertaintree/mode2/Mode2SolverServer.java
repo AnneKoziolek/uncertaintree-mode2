@@ -59,6 +59,11 @@ public final class Mode2SolverServer {
                     // queries slower over time (native objects pile up); one Solver for the whole
                     // process made Z3 5-9 times slower on the same queries in later analyses.
                     Solver solver = ctx.mkSolver();
+                    // A check without limit can run for hours on a nonlinear real query (two
+                    // design variables, (r - m)^2, demonstrator 2026-11-11): UNKNOWN after the limit.
+                    com.microsoft.z3.Params checkLimit = ctx.mkParams();
+                    checkLimit.add("timeout", Integer.getInteger("mode2.checkTimeoutMs", 30000));
+                    solver.setParameters(checkLimit);
                   // One connection per analysis, many requests on it (a new socket and new object
                   // streams per query cost about 175 ms in the instrumented client).
                   while (true) {
@@ -96,6 +101,17 @@ public final class Mode2SolverServer {
                         out.reset();
                         continue;
                     }
+                    // {"CHECK", constraint, timeout ms}: a check with its own time limit (bisection).
+                    Integer limitMs = null;
+                    if (req instanceof Object[] && "CHECK".equals(((Object[]) req)[0])) {
+                        limitMs = (Integer) ((Object[]) req)[2];
+                        req = ((Object[]) req)[1];
+                    }
+                    if (limitMs != null) {
+                        com.microsoft.z3.Params p = ctx.mkParams();
+                        p.add("timeout", limitMs);
+                        solver.setParameters(p);
+                    }
                     try {
                         long r0 = System.nanoTime();
                         Z3JavaTranslator t = new Z3JavaTranslator(ctx);
@@ -125,6 +141,9 @@ public final class Mode2SolverServer {
                         ++queries;
                     } catch (Throwable e) {
                         status = "ERROR " + e;
+                    }
+                    if (limitMs != null) {
+                        solver.setParameters(checkLimit); // back to the connection's default limit
                     }
                     long w0 = System.nanoTime();
                     out.writeObject(status);

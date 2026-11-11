@@ -52,6 +52,7 @@ public final class Mode2Solver implements AutoCloseable {
         if (dump != null && !dump.isBlank()) {
             cmd.add("-Dmode2.dumpSlowQueries=" + System.getProperty("mode2.dumpSlowQueries"));
         }
+        cmd.add("-Dmode2.checkTimeoutMs=" + Integer.getInteger("mode2.checkTimeoutMs", 30000));
         cmd.addAll(java.util.List.of("-cp", System.getProperty("java.class.path"),
                 Mode2SolverServer.class.getName(), String.valueOf(port)));
         ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -86,8 +87,24 @@ public final class Mode2Solver implements AutoCloseable {
         return send(new Object[] {"BOUNDS", e, var});
     }
 
+    /** Checks that ended UNKNOWN (Z3 gave up or hit mode2.checkTimeoutMs); the analysis treats them as unsatisfiable. */
+    public int unknowns;
+
+    /** A check with its own time limit (e.g. bisection steps, which tolerate an UNKNOWN). */
+    public Result check(Expression e, int timeoutMs) throws Exception {
+        Result r = send(new Object[] {"CHECK", e, timeoutMs});
+        if ("UNKNOWN".equals(r.status)) {
+            unknowns++;
+        }
+        return r;
+    }
+
     public Result check(Expression e) throws Exception {
-        return send(e);
+        Result r = send(e);
+        if ("UNKNOWN".equals(r.status)) {
+            unknowns++;
+        }
+        return r;
     }
 
     @SuppressWarnings("unchecked")

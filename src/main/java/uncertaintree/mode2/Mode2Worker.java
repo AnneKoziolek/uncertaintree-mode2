@@ -131,7 +131,7 @@ public final class Mode2Worker {
         }
         c.solver = solver;
         c.maxPaths = req.maxPaths;
-        c.incomingChanges = req.incomingChanges;
+        c.incomingChanges = new ArrayList<>(req.incomingChanges);
         try {
             Mode2Result r = new Mode2Engine(c).analyze();
             analyses++;

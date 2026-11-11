@@ -86,6 +86,13 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Mode 2 core (core/, installed first: scripts/mvn.sh builds it) -->
+        <dependency>
+            <groupId>uncertaintree.mode2</groupId>
+            <artifactId>uncertaintree-mode2-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- UncertainTree brake case study (master @ 7b067a6, installed into .m2-bell) -->
         <dependency>
             <groupId>tools.vitruv</groupId>
