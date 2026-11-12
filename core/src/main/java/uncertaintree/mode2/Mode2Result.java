@@ -59,6 +59,8 @@ public final class Mode2Result {
         public boolean consistent;
         /** In the annotated domain but in no explored region (exploration stopped at maxPaths or a coverage gap). */
         public boolean unexplored;
+        /** No region found because a check ended UNKNOWN or ERROR: the point may belong to an explored region. */
+        public boolean undecided;
         /** Labels of the request that name no source (not part of this analysis). */
         public List<String> ignored = new ArrayList<>();
     }
@@ -109,8 +111,10 @@ public final class Mode2Result {
         public double hi;
         public boolean loOpen;
         public boolean hiOpen;
-        /** True if a bound could not be computed exactly (nonlinear path condition: bisection). */
+        /** True if a bound could not be computed exactly (nonlinear path condition: bisection), or its openness was not decided. */
         public boolean approximate;
+        /** A bound is a truncated decimal of an exact rational (e.g. 1/3); openness is still exact (decided by the solver). */
+        public boolean rounded;
 
         public RealInterval() {}
 
@@ -263,6 +267,8 @@ public final class Mode2Result {
         public int coverageGaps;
         /** Solver checks that ended UNKNOWN (timeout); treated as unsatisfiable, so a region may be missing. */
         public int solverUnknowns;
+        /** The solverUnknowns by reason (Z3's reason, "wall-clock", or the ERROR). */
+        public Map<String, Integer> solverUnknownReasons = new LinkedHashMap<>();
         public long solverMillis;
         public long totalMillis;
         public List<Long> pathMillis = new ArrayList<>();

@@ -24,6 +24,11 @@ public final class Mode2Solver implements AutoCloseable {
             return "SATISFIABLE".equals(status);
         }
 
+        /** The only answer that proves something: UNKNOWN and ERROR prove neither SAT nor UNSAT. */
+        public boolean unsat() {
+            return "UNSATISFIABLE".equals(status);
+        }
+
         @Override
         public String toString() {
             return status + (model == null ? "" : " " + model);
@@ -87,24 +92,35 @@ public final class Mode2Solver implements AutoCloseable {
         return send(new Object[] {"BOUNDS", e, var});
     }
 
-    /** Checks that ended UNKNOWN (Z3 gave up or hit mode2.checkTimeoutMs); the analysis treats them as unsatisfiable. */
+    /** Checks that ended UNKNOWN or ERROR (neither proves SAT nor UNSAT). */
     public int unknowns;
+    /** Those checks by reason ("UNKNOWN timeout", "UNKNOWN wall-clock", "ERROR non-finite constant NaN", ...). */
+    public final Map<String, Integer> unknownReasons = new java.util.TreeMap<>();
 
-    /** A check with its own time limit (e.g. bisection steps, which tolerate an UNKNOWN). */
-    public Result check(Expression e, int timeoutMs) throws Exception {
-        Result r = send(new Object[] {"CHECK", e, timeoutMs});
-        if ("UNKNOWN".equals(r.status)) {
+    private Result count(Result r) {
+        if (r.status != null && !r.sat() && !r.unsat()) {
             unknowns++;
+            String reason = r.status.length() > 80 ? r.status.substring(0, 80) : r.status;
+            unknownReasons.merge(reason, 1, Integer::sum);
         }
         return r;
     }
 
+    /** A check with its own time limit (e.g. bisection steps, which tolerate an UNKNOWN). */
+    public Result check(Expression e, int timeoutMs) throws Exception {
+        return count(send(new Object[] {"CHECK", e, timeoutMs}));
+    }
+
     public Result check(Expression e) throws Exception {
-        Result r = send(e);
-        if ("UNKNOWN".equals(r.status)) {
-            unknowns++;
-        }
-        return r;
+        return count(send(e));
+    }
+
+    /**
+     * Bounds of {@code var} under {@code closure}, and, decided by the solver with exact numerals
+     * against {@code original}: "tight", "minOpen", "maxOpen" ("true", "false" or "unknown").
+     */
+    public Result bounds(Expression closure, String var, Expression original) throws Exception {
+        return send(new Object[] {"BOUNDS", closure, var, original});
     }
 
     @SuppressWarnings("unchecked")

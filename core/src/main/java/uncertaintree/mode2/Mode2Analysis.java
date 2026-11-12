@@ -198,6 +198,7 @@ public final class Mode2Analysis {
         Mode2Solver s = own != null ? own : config.solver;
         int queries0 = s.queries;
         int unknowns0 = s.unknowns;
+        Map<String, Integer> reasons0 = new LinkedHashMap<>(s.unknownReasons);
         long nanos0 = s.nanos;
         long write0 = s.writeNanos;
         long reply0 = s.replyNanos;
@@ -272,6 +273,12 @@ public final class Mode2Analysis {
             result.stats.concreteExecutions = paths.size();
             result.stats.solverQueries = solver.queries - queries0;
             result.stats.solverUnknowns = solver.unknowns - unknowns0;
+            solver.unknownReasons.forEach((reason, n) -> {
+                int d = n - reasons0.getOrDefault(reason, 0);
+                if (d > 0) {
+                    result.stats.solverUnknownReasons.put(reason, d);
+                }
+            });
             result.stats.solverMillis = (solver.nanos - nanos0) / 1_000_000;
             result.stats.phaseMillis.put("solver.write", (solver.writeNanos - write0) / 1_000_000);
             result.stats.phaseMillis.put("solver.readReply", (solver.replyNanos - reply0) / 1_000_000);
@@ -587,7 +594,7 @@ public final class Mode2Analysis {
                 for (PathRun p : paths) {
                     Expression e = p.annotationExprs.get(i);
                     if (e != null) {
-                        identity &= !sat(and(and(domain(), pc(p)),
+                        identity &= unsat(and(and(domain(), pc(p)),
                                 new BinaryOperation(Operator.NE, e, expectedExpression(own, c.element))));
                     }
                 }
@@ -691,7 +698,20 @@ public final class Mode2Analysis {
 
     // ---------------------------------------------------------------- regions and solver
 
+    /** The region of a path; marked approximate if a check of its extent ended UNKNOWN or ERROR. */
     private Mode2Result.Region region(PathRun p) throws Exception {
+        int u0 = solver.unknowns;
+        Mode2Result.Region r = regionChecked(p);
+        int u = solver.unknowns - u0;
+        if (u > 0) {
+            r.approximate = true;
+            String why = u + " solver check(s) of the extent ended UNKNOWN or ERROR (no claim made from them)";
+            r.approximateReason = r.approximateReason == null ? why : r.approximateReason + "; " + why;
+        }
+        return r;
+    }
+
+    private Mode2Result.Region regionChecked(PathRun p) throws Exception {
         Mode2Result.Region r = new Mode2Result.Region();
         r.representative.putAll(p.input);
         r.verdicts.putAll(p.verdicts);
@@ -738,8 +758,8 @@ public final class Mode2Analysis {
             r.intervals.put(s.label, new int[] {lo, hi});
             box = and(box, and(ge(s, lo), le(s, hi)));
         }
-        boolean pcInBox = box == null || !sat(and(pc, not(box)));
-        boolean boxInPc = box == null || !sat(and(and(domain(), box), not(pc)));
+        boolean pcInBox = box == null || unsat(and(pc, not(box)));
+        boolean boxInPc = box == null || unsat(and(and(domain(), box), not(pc)));
         r.extentType = pcInBox && boxInPc ? "box" : "predicate";
         if ("box".equals(r.extentType)) {
             double share = 1;
@@ -778,14 +798,22 @@ public final class Mode2Analysis {
         }
         // Optimize on the closure (Exprs.closure: Z3 4.8.14 gets strict real suprema wrong), then
         // verify on the original condition and decide each end's openness there.
-        Mode2Solver.Result b = solver.bounds(Exprs.closure(pc), s.label);
+        // Tightness and openness are decided by the solver with Z3's exact optimum: the decimal
+        // (e.g. 0.3333333333 for 1/3) lies inside the interval (concept 21).
+        Mode2Solver.Result b = solver.bounds(Exprs.closure(pc), s.label, pc);
         if (b != null && b.sat() && b.model.get("min") != null && b.model.get("max") != null) {
-            double lo = Double.parseDouble(b.model.get("min").replace("?", "")); // "?" marks a truncated decimal
-            double hi = Double.parseDouble(b.model.get("max").replace("?", ""));
-            boolean tight = !sat(and(pc, cmp(s, Operator.LT, lo))) && !sat(and(pc, cmp(s, Operator.GT, hi)));
-            if (tight) {
-                return new Mode2Result.RealInterval(lo, !sat(and(pc, cmp(s, Operator.EQ, lo))),
-                        hi, !sat(and(pc, cmp(s, Operator.EQ, hi))));
+            String minText = b.model.get("min");
+            String maxText = b.model.get("max");
+            double lo = Double.parseDouble(minText.replace("?", "")); // "?" marks a truncated decimal
+            double hi = Double.parseDouble(maxText.replace("?", ""));
+            if ("true".equals(b.model.get("tight"))) {
+                Mode2Result.RealInterval iv = new Mode2Result.RealInterval(lo, "true".equals(b.model.get("minOpen")),
+                        hi, "true".equals(b.model.get("maxOpen")));
+                iv.rounded = minText.contains("?") || maxText.contains("?");
+                if ("unknown".equals(b.model.get("minOpen")) || "unknown".equals(b.model.get("maxOpen"))) {
+                    iv.approximate = true; // openness not decided (UNKNOWN); reported closed
+                }
+                return iv;
             }
             System.out.println("[mode2] optimizer bounds not tight for " + s.label + ", bisection");
         } else {
@@ -891,7 +919,7 @@ public final class Mode2Analysis {
                 for (int k = 0; k < ints.size(); k++) {
                     fixedDomain = and(fixedDomain, new BinaryOperation(Operator.EQ, var(ints.get(k)), new IntConstant(at[k])));
                 }
-                exact &= !sat(and(and(fixedDomain, box), not(pc))); // the slice is exactly its intervals
+                exact &= unsat(and(and(fixedDomain, box), not(pc))); // the slice is exactly its intervals
                 probability += share / intDomain;
                 r.slices.add(sl);
             }
@@ -976,14 +1004,14 @@ public final class Mode2Analysis {
         while (a < b) {
             if (lower) {
                 int m = Math.floorDiv(a + b, 2);
-                if (sat(and(pc, le(s, m)))) {
+                if (possible(and(pc, le(s, m)))) { // UNKNOWN keeps the outer bound
                     b = m;
                 } else {
                     a = m + 1;
                 }
             } else {
                 int m = Math.floorDiv(a + b + 1, 2);
-                if (sat(and(pc, ge(s, m)))) {
+                if (possible(and(pc, ge(s, m)))) {
                     a = m;
                 } else {
                     b = m - 1;
@@ -1086,17 +1114,29 @@ public final class Mode2Analysis {
             if (!result.nominal.fixpointConfirmed && full.equals(nominal)) {
                 pr.region = result.nominal.region;
             } else if (sat(and(dom, point(full)))) {
+                int u0 = solver.unknowns;
                 for (int i = 0; i < paths.size(); i++) {
                     if (sat(and(and(dom, pc(paths.get(i))), point(full)))) {
                         pr.region = i;
                         break;
                     }
                 }
-                pr.unexplored = pr.region < 0; // in the domain, but the exploration stopped before reaching it
+                pr.undecided = pr.region < 0 && solver.unknowns > u0; // a region check ended UNKNOWN or ERROR
+                pr.unexplored = pr.region < 0 && !pr.undecided; // in the domain, but the exploration stopped before reaching it
             }
             pr.consistent = pr.region >= 0 && result.regions.get(pr.region).consistent;
             result.points.add(pr);
         }
+    }
+
+    /** Proved unsatisfiable; UNKNOWN and ERROR prove nothing (concept 21). */
+    private boolean unsat(Expression e) throws Exception {
+        return solver.check(e).unsat();
+    }
+
+    /** Not proved unsatisfiable: SAT, UNKNOWN or ERROR (searches keep the outer bound on it). */
+    private boolean possible(Expression e) throws Exception {
+        return !unsat(e);
     }
 
     private boolean sat(Expression e) throws Exception {
